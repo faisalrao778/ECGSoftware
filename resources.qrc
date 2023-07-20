@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/resc">
+        <file>assests/images/ecg-icon.png</file>
+        <file>assests/images/hidden-bar-logo.png</file>
+    </qresource>
+</RCC>
