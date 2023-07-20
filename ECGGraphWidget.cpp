@@ -1,27 +1,50 @@
 #include "ECGGraphWidget.h"
 
-//QT_CHARTS_USE_NAMESPACE
-
-ECGGraphWidget::ECGGraphWidget(QWidget *parent)
-    : QWidget(parent), dataBuffer(512), dataCounter(0)
+ECGGraphWidget::ECGGraphWidget(QWidget *parent) : QWidget(parent)
 {
-    setupSerialPort();
     setupGraph();
+    // setupSerialPort();
 
-    connect(&serialPort, &QSerialPort::readyRead, this, &ECGGraphWidget::readData);
+    // Simulate real ECG data here and add it to the series
+    // Replace this with actual ECG data from your device
+    QTimer* timer = new QTimer(this);
+    connect(timer, &QTimer::timeout, this, &ECGGraphWidget::updateData);
+    timer->start(100);
 }
 
-void ECGGraphWidget::readData()
+void ECGGraphWidget::setupGraph()
 {
-    QByteArray data = serialPort.readAll();
-    qInfo() << "data received----1";
-    parseData(data);
-    //    for (int i = 0; i < data.size(); ++i)
-    //    {
-    //        parseData(data);
-    //        qInfo() << "data received----2";
-    //       // processByte(static_cast<quint8>(data.at(i)));
-    //    }
+    ecgSeries = new QLineSeries();
+
+    ecgChart = new QChart();
+    ecgChart->addSeries(ecgSeries);
+    ecgChart->setTitle("ECG Chart");
+    ecgChart->legend()->setVisible(false);
+
+    QValueAxis *xAxis = new QValueAxis;
+    xAxis->setTitleText("Time");
+    ecgChart->addAxis(xAxis, Qt::AlignBottom);
+    ecgSeries->attachAxis(xAxis);
+
+    QValueAxis *yAxis = new QValueAxis;
+    yAxis->setTitleText("Amplitude");
+    ecgChart->addAxis(yAxis, Qt::AlignLeft);
+    ecgSeries->attachAxis(yAxis);
+
+    // Set the line width
+    QPen pen = ecgSeries->pen();
+    pen.setWidth(1); // Set the line width to 2 pixels
+    pen.setColor(Qt::red);
+    ecgSeries->setPen(pen);
+
+    chartView = new QChartView(ecgChart);
+    chartView->setRenderHint(QPainter::Antialiasing);
+
+    QVBoxLayout *layout = new QVBoxLayout(this);
+    layout->addWidget(chartView);
+
+    this->setLayout(layout);
+    this->resize(600,400);
 }
 
 void ECGGraphWidget::setupSerialPort()
@@ -35,94 +58,50 @@ void ECGGraphWidget::setupSerialPort()
 
     if (!serialPort.open(QIODevice::ReadOnly))
     {
-        QMessageBox::critical(this, "Error", "Failed to open serial port!");
+        QMessageBox::critical(this, "Error", "Failed To Open Serial Port!");
         return;
     }
+
+    connect(&serialPort, &QSerialPort::readyRead, this, &ECGGraphWidget::readData);
 }
 
-void ECGGraphWidget::setupGraph()
+void ECGGraphWidget::readData()
 {
-    series = new QLineSeries();
-    chart = new QChart();
-    chart->legend()->hide();
-    chart->addSeries(series);
-    chart->createDefaultAxes();
-    chart->setTitle("ECG Graph");
+    readBuffer.append(serialPort.readAll());
 
-    chartView = new QChartView(chart, this);
-    chartView->setRenderHint(QPainter::Antialiasing);
+    while (readBuffer.size() >= 3)
+    {
+        if (readBuffer.at(0) == 0xAA)
+        {
+            uchar lsb = static_cast<uchar>(readBuffer.at(1));
+            uchar msb = static_cast<uchar>(readBuffer.at(2));
 
-    QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->addWidget(chartView);
-    setLayout(layout);
-}
+            int ecgValue = (msb << 8) | lsb;
 
-void ECGGraphWidget::parseData(QByteArray data)
-{
-    qInfo() << "data received----4";
-    QDataStream stream(data);
-    stream.setByteOrder(QDataStream::BigEndian);
-    quint8 header, msb,lsb;
+            ecgData.insert(QDateTime::currentDateTime(), ecgValue);
 
-    stream >> header;
-    stream >> msb;
-    stream >> lsb;
-    qInfo() << "STREAM ==> " << header << msb << lsb;
-    if(header){
-        qInfo() << "data received----5";
-        // Update the graph with the new value
-        series->append(msb, msb);
-
-        // Adjust the chart view to show the updated data
-        chart->axisX()->setRange(0, msb + 1);
-        chart->axisY()->setRange(0, 200);
-
-        // Redraw the chart
-        chart->update();
-
-        // Clear the data counter for the next set of values
-        dataCounter = 0;
-
+            readBuffer.remove(0, 3);
+        }
+        else
+        {
+            readBuffer.remove(0, 1);
+        }
     }
 }
 
-//void ECGGraphWidget::processByte(quint8 byte)
-//{
-//    dataBuffer[dataCounter] = byte;
-//    dataCounter++;
-//qInfo() << "data received----3";
-//    if (dataCounter == 3)
-//    {
-//        // Extract the header, MSB, and LSB values
-//        quint8 header = dataBuffer[0];
-//        quint8 msb = dataBuffer[1];
-//        quint8 lsb = dataBuffer[2];
-//        qInfo() << "data received----4" << header;
-//        // Check if the received data is valid
-//        if (header == 0xAA)
-//        {
-//    qInfo() << "data received----5";
+void ECGGraphWidget::updateData()
+{
+    // Simulate new data points (replace this with actual data from your device)
+    qreal time = dataCount * 0.03; // Assuming time is in seconds
+    qreal amplitude = qrand() % 200; // Random amplitude between 0 and 200 mV
 
-//            // Combine MSB and LSB to get the heartbeats per minute value
-//            int value = (msb << 8) | lsb;
+    // Append the new data point to the chart series
+    ecgSeries->append(time, amplitude);
 
-//            // Update the graph with the new value
-//            series->append(dataCounter, value);
+    // Increment the data counter
+    ++dataCount;
 
-//            // Adjust the chart view to show the updated data
-//            chart->axisX()->setRange(0, dataCounter + 1);
-//            chart->axisY()->setRange(0, 200);
-
-//            // Redraw the chart
-//            chart->update();
-
-//            // Clear the data counter for the next set of values
-//            dataCounter = 0;
-//        }
-//        else
-//        {
-//            // Invalid data, reset the data counter
-//            dataCounter = 0;
-//        }
-//    }
-//}
+    // Update the chart view
+    ecgChart->axisX()->setRange(dataCount * 0.03 - 5, dataCount * 0.03); // Show the last 5 seconds of data
+    ecgChart->axisY()->setRange(0, 200); // Adjust the Y-axis range based on your ECG data range
+}

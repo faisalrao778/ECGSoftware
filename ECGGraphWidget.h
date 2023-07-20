@@ -16,19 +16,23 @@ public:
 
 private slots:
     void readData();
+    void updateData();
 
 private:
-    void setupSerialPort();
-    void setupGraph();
-    //void processByte(quint8 byte);
-    void parseData(QByteArray data);
+    int dataCount = 0; // Counter to simulate continuous data
+
+    QMap<QDateTime, int> ecgData;
 
     QSerialPort serialPort;
-    QVector<quint8> dataBuffer;
-    int dataCounter;
-    QLineSeries *series;
-    QChart *chart;
+    QByteArray readBuffer;
+
+    QLineSeries *ecgSeries;
+    QChart *ecgChart;
     QChartView *chartView;
+
+    void setupSerialPort();
+    void setupGraph();
+    void parseData(QByteArray data);
 };
 
 #endif // ECGGRAPHWIDGET_H
