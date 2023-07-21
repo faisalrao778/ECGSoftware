@@ -23,6 +23,8 @@ private:
 
     QMap<QDateTime, int> ecgData;
 
+    qreal timeGlobal= 0, ampGlobal = 0;
+    qreal startTime;
     QSerialPort serialPort;
     QByteArray readBuffer;
 
