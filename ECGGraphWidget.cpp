@@ -1,20 +1,18 @@
 #include "ECGGraphWidget.h"
+#include "DataWorker.h"
 
 ECGGraphWidget::ECGGraphWidget(QWidget *parent) : QWidget(parent)
 {
     setupGraph();
-    setupSerialPort();
 
-    qint64 unixTimestamp = QDateTime::currentDateTime().toMSecsSinceEpoch()/10;
+    dataThread = new QThread(this);
+    dataWorker = new DataWorker();
+    dataWorker->moveToThread(dataThread);
 
-    // Convert the Unix timestamp to qreal (float)
-    startTime = static_cast<qreal>(unixTimestamp);
+    connect(dataThread, &QThread::started, dataWorker, &DataWorker::startReading);
+    connect(dataWorker, &DataWorker::dataProcessed, this, &ECGGraphWidget::updateData);
 
-    // Simulate real ECG data here and add it to the series
-    // Replace this with actual ECG data from your device
-    QTimer* timer = new QTimer(this);
-    connect(timer, &QTimer::timeout, this, &ECGGraphWidget::updateData);
-    timer->start(10);
+    dataThread->start();
 }
 
 void ECGGraphWidget::setupGraph()
@@ -38,100 +36,62 @@ void ECGGraphWidget::setupGraph()
 
     // Set the line width
     QPen pen = ecgSeries->pen();
-    pen.setWidth(1); // Set the line width to 2 pixels
+    pen.setWidth(1);
     pen.setColor(Qt::red);
     ecgSeries->setPen(pen);
 
     chartView = new QChartView(ecgChart);
     chartView->setRenderHint(QPainter::Antialiasing);
 
-    QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->addWidget(chartView);
+    QPushButton *saveButton = new QPushButton("Save Data", this);
+    saveButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 
-    this->setLayout(layout);
+    QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    mainLayout->addWidget(chartView);
+    mainLayout->addWidget(saveButton);
+
+    this->setLayout(mainLayout);
     this->resize(600,400);
+
+    connect(saveButton, &QPushButton::clicked, this, &ECGGraphWidget::saveData);
 }
 
-void ECGGraphWidget::setupSerialPort()
+void ECGGraphWidget::updateData(qint64 timestamp, int ecgAmplitude)
 {
-    serialPort.setPortName("COM10");
-    serialPort.setBaudRate(QSerialPort::Baud115200);
-    serialPort.setDataBits(QSerialPort::Data8);
-    serialPort.setParity(QSerialPort::NoParity);
-    serialPort.setStopBits(QSerialPort::OneStop);
-    serialPort.setFlowControl(QSerialPort::NoFlowControl);
+    qDebug()<<"¨Time : " << timestamp;
+    qDebug()<<" Àmp  : " << ecgAmplitude;
 
-    if (!serialPort.open(QIODevice::ReadOnly))
-    {
-        QMessageBox::critical(this, "Error", "Failed To Open Serial Port!");
-        return;
-    }
+    ecgData.insert(timestamp, ecgAmplitude);
 
-    connect(&serialPort, &QSerialPort::readyRead, this, &ECGGraphWidget::readData);
-}
+    ecgSeries->append(timestamp, ecgAmplitude);
 
-void ECGGraphWidget::readData()
-{
-    readBuffer.append(serialPort.readAll());
-
-    //qDebug()<<readBuffer;
-
-    while (readBuffer.size() >= 3)
-    {
-
-       //qDebug()<<"readBuffer: "<<static_cast<qint8>(readBuffer.at(0));
-        if ((readBuffer.at(0)) == '\xAA')
-        {
-            uchar lsb = static_cast<uchar>(readBuffer.at(1));
-            uchar msb = static_cast<uchar>(readBuffer.at(2));
-
-            int ecgValue = (msb << 8) | lsb;
-
-           // qDebug()<<QString::number(ecgValue);
-            ecgData.insert(QDateTime::currentDateTime(), ecgValue);
-            qint64 unixTimestamp = QDateTime::currentDateTime().toMSecsSinceEpoch()/10;
-
-            // Convert the Unix timestamp to qreal (float)
-            qreal floatValueOfTime = static_cast<qreal>(unixTimestamp);
-             timeGlobal = floatValueOfTime - startTime; // Assuming time is in seconds
-             ampGlobal =ecgValue;
-/*
-             qDebug()<<"¨Time:"<<timeGlobal;
-             qDebug()<<"Àmp:"<<ampGlobal;
-             // Append the new data point to the chart series
-             ecgSeries->append(timeGlobal, ampGlobal);
-
-             // Increment the data counter
-             ++dataCount;
-
-             // Update the chart view
-             ecgChart->axisX()->setRange(timeGlobal - 5, timeGlobal); // Show the last 5 seconds of data
-             ecgChart->axisY()->setRange(0, 65536); // Adjust the Y-axis range based on your ECG data range
-*/
-            readBuffer.remove(0, 3);
-        }
-        else
-        {
-            readBuffer.remove(0, 1);
-        }
-    }
-}
-
-void ECGGraphWidget::updateData()
-{
-    // Simulate new data points (replace this with actual data from your device)
-    //qreal time = dataCount * 0.03; // Assuming time is in seconds
-   // qreal amplitude = qrand() % 200; // Random amplitude between 0 and 200 mV
-
-    qDebug()<<"¨Time:"<<timeGlobal;
-    qDebug()<<"Àmp:"<<ampGlobal;
-    // Append the new data point to the chart series
-    ecgSeries->append(timeGlobal, ampGlobal);
-
-    // Increment the data counter
-    ++dataCount;
-
-    // Update the chart view
-    ecgChart->axisX()->setRange(timeGlobal - 5, timeGlobal); // Show the last 5 seconds of data
+    ecgChart->axisX()->setRange(timestamp - 5000, timestamp); // Show the last 5 seconds of data
     ecgChart->axisY()->setRange(0, 65536); // Adjust the Y-axis range based on your ECG data range
+}
+
+void ECGGraphWidget::saveData()
+{
+    QString fileName = QFileDialog::getSaveFileName(this, "Save Data", QDir::homePath(), "Data Files (*.dat);;All Files (*)");
+
+    if (fileName.isEmpty())
+        return;
+
+    QFile file(fileName);
+    if (file.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        QTextStream out(&file);
+        // Save the data from the ecgData map to the file in the desired format
+        for (auto it = ecgData.begin(); it != ecgData.end(); ++it)
+        {
+            qint64 timestamp = it.key();
+            int ecgAmplitude = it.value();
+            out << timestamp << "," << ecgAmplitude << "\n";
+        }
+        file.close();
+    }
+    else
+    {
+        // Handle file open error if needed
+        QMessageBox::critical(this, "Error", "Failed to save data to the file.");
+    }
 }

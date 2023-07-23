@@ -7,6 +7,8 @@
 #include <QtWidgets>
 #include <QtCharts>
 
+class DataWorker;
+
 class ECGGraphWidget : public QWidget
 {
     Q_OBJECT
@@ -15,26 +17,22 @@ public:
     explicit ECGGraphWidget(QWidget *parent = nullptr);
 
 private slots:
-    void readData();
-    void updateData();
+    void updateData(qint64 timestamp, int ecgAmplitude);
+    void saveData();
 
 private:
-    int dataCount = 0; // Counter to simulate continuous data
 
-    QMap<QDateTime, int> ecgData;
-
-    qreal timeGlobal= 0, ampGlobal = 0;
-    qreal startTime;
-    QSerialPort serialPort;
-    QByteArray readBuffer;
+    QMap<qint64, int> ecgData;
 
     QLineSeries *ecgSeries;
     QChart *ecgChart;
     QChartView *chartView;
 
-    void setupSerialPort();
+    QThread *dataThread;
+    DataWorker *dataWorker;
+
     void setupGraph();
-    void parseData(QByteArray data);
+
 };
 
 #endif // ECGGRAPHWIDGET_H
