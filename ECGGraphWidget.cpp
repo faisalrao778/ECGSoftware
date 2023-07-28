@@ -1,5 +1,5 @@
 #include "ECGGraphWidget.h"
-#include "DataWorker.h"
+//#include "DataWorker.h"
 
 ECGGraphWidget::ECGGraphWidget(QWidget *parent) : QWidget(parent)
 {
