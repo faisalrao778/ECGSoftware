@@ -6,6 +6,7 @@
 #include <QVector>
 #include <QtWidgets>
 #include <QtCharts>
+#include <QtConcurrent>
 
 class DataWorker;
 
@@ -16,14 +17,16 @@ class ECGGraphWidget : public QWidget
 public:
     explicit ECGGraphWidget(QWidget *parent = nullptr);
 
+signals:
+    void dataProcessed(QStringList);
+
 private slots:
-    void readData();
-    void updateData(qint64 timestamp, int ecgAmplitude);
+    void startReading();
+    void updateECGData(QStringList);
     void saveData();
 
 private:
-    QByteArray readBuffer;
-    QMap<qint64, int> ecgData;
+    QVector<QPointF> dataPoints;
 
     QLineSeries *ecgSeries;
     QChart *ecgChart;
@@ -32,12 +35,8 @@ private:
     qint64 lastReceivedTimestamp;
     QSerialPort serialPort;
 
-    QThread *dataThread;
-    DataWorker *dataWorker;
-
     void setupGraph();
     void setupSerialPort();
-
 };
 
 #endif // ECGGRAPHWIDGET_H

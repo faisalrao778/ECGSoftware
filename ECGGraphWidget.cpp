@@ -8,14 +8,9 @@ ECGGraphWidget::ECGGraphWidget(QWidget *parent) : QWidget(parent)
     setupGraph();
     setupSerialPort();
 
-    // dataThread = new QThread(this);
-    // dataWorker = new DataWorker();
-    // dataWorker->moveToThread(dataThread);
+    QtConcurrent::run(this, &ECGGraphWidget::startReading);
 
-    // connect(dataThread, &QThread::started, dataWorker, &DataWorker::startReading);
-    // connect(dataWorker, &DataWorker::dataProcessed, this, &ECGGraphWidget::updateData);
-
-    // dataThread->start();
+    connect(this, &ECGGraphWidget::dataProcessed, this, &ECGGraphWidget::updateECGData);
 }
 
 void ECGGraphWidget::setupGraph()
@@ -29,15 +24,17 @@ void ECGGraphWidget::setupGraph()
 
     QValueAxis *xAxis = new QValueAxis;
     xAxis->setTitleText("Time");
+    xAxis->setTickCount(10);
     ecgChart->addAxis(xAxis, Qt::AlignBottom);
-    ecgSeries->attachAxis(xAxis);
 
     QValueAxis *yAxis = new QValueAxis;
     yAxis->setTitleText("Amplitude");
     ecgChart->addAxis(yAxis, Qt::AlignLeft);
-    ecgSeries->attachAxis(yAxis);
 
-    // Set the line width
+    ecgSeries->attachAxis(xAxis);
+    ecgSeries->attachAxis(yAxis);
+    ecgSeries->setUseOpenGL(true);
+
     QPen pen = ecgSeries->pen();
     pen.setWidth(1);
     pen.setColor(Qt::red);
@@ -54,7 +51,7 @@ void ECGGraphWidget::setupGraph()
     mainLayout->addWidget(saveButton);
 
     this->setLayout(mainLayout);
-    this->resize(800,400);
+    this->resize(1500,900);
 
     connect(saveButton, &QPushButton::clicked, this, &ECGGraphWidget::saveData);
 }
@@ -75,50 +72,68 @@ void ECGGraphWidget::setupSerialPort()
     }
 
     qDebug() << "Opened Serial Port!";
-    connect(&serialPort, &QSerialPort::readyRead, this, &ECGGraphWidget::readData);
 }
 
-void ECGGraphWidget::readData()
+void ECGGraphWidget::startReading()
 {
-    readBuffer.append(serialPort.readAll());
+    QStringList dataPoints;
+    QByteArray readBuffer;
 
-    while (readBuffer.size() >= 3)
+    while (true)
     {
-        // qDebug()<<"readBuffer: "<<static_cast<qint8>(readBuffer.at(0));
-        if ((readBuffer.at(0)) == '\xAA')
+        QCoreApplication::processEvents();
+
+        readBuffer.append(serialPort.readAll());
+
+        while (readBuffer.size() >= 3)
         {
-            uchar lsb = static_cast<uchar>(readBuffer.at(1));
-            uchar msb = static_cast<uchar>(readBuffer.at(2));
-
-            int ecgValue = (msb << 8) | lsb;
-            qint64 timestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
-
-            if (timestamp - lastReceivedTimestamp >= 30)
+            if ((readBuffer.at(0)) == '\xAA')
             {
-              qDebug() << timestamp << "-" << ecgValue;
-              qDebug() << "dataProcessed";
-               updateData(timestamp, ecgValue);
+                uchar lsb = static_cast<uchar>(readBuffer.at(1));
+                uchar msb = static_cast<uchar>(readBuffer.at(2));
 
-               lastReceivedTimestamp = timestamp;
+                int ecgValue = (msb << 8) | lsb;
+                qint64 timestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
+
+                dataPoints.append(QString::number(timestamp)+"|"+QString::number(ecgValue));
+
+                if (timestamp - lastReceivedTimestamp >= 50)
+                {
+                    qDebug() << "Update To Chart";
+                    emit dataProcessed(dataPoints);
+                    dataPoints.clear();
+                    lastReceivedTimestamp = timestamp;
+                }
+                readBuffer.remove(0, 3);
             }
+            else
+            {
+                readBuffer.remove(0, 1);
+            }
+        }
 
-            readBuffer.remove(0, 3);
-        }
-        else
-        {
-            readBuffer.remove(0, 1);
-        }
+        QThread::msleep(10);
     }
 }
 
-void ECGGraphWidget::updateData(qint64 timestamp, int ecgAmplitude)
+void ECGGraphWidget::updateECGData(QStringList ecgList)
 {
-    ecgData.insert(timestamp, ecgAmplitude);
+    qDebug() << "updateECGData : " << ecgList.size();
 
-    ecgSeries->append(timestamp, ecgAmplitude);
+    for (int i = 0 ; i < ecgList.size() ; i++)
+    {
+        qint64 timestamp = ecgList.at(i).split("|").at(0).toLongLong();
+        int ecgValue = ecgList.at(i).split("|").at(1).toInt();
+        dataPoints.append(QPointF(timestamp, ecgValue));
+    }
 
-    ecgChart->axisX()->setRange(timestamp - 10000, timestamp); // Show the last 5 seconds of data
-    ecgChart->axisY()->setRange(0, 65536); // Adjust the Y-axis range based on your ECG data range
+    ecgSeries->replace(dataPoints);
+
+    qint64 firstTimestamp = dataPoints.first().x();
+    qint64 lastTimestamp = dataPoints.last().x();
+
+    ecgChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
+    ecgChart->axisY()->setRange(0, 65536);
 }
 
 void ECGGraphWidget::saveData()
@@ -133,12 +148,13 @@ void ECGGraphWidget::saveData()
     {
         QTextStream out(&file);
         // Save the data from the ecgData map to the file in the desired format
-        for (auto it = ecgData.begin(); it != ecgData.end(); ++it)
+        for (const QPointF& point : dataPoints)
         {
-            qint64 timestamp = it.key();
-            int ecgAmplitude = it.value();
+            qint64 timestamp = point.x();
+            int ecgAmplitude = point.y();
             out << timestamp << "," << ecgAmplitude << "\n";
         }
+
         file.close();
     }
     else
