@@ -25,6 +25,7 @@ void ECGGraphWidget::setupGraph()
     QValueAxis *xAxis = new QValueAxis;
     xAxis->setTitleText("Time");
     xAxis->setTickCount(10);
+    xAxis->setReverse(true);
     ecgChart->addAxis(xAxis, Qt::AlignBottom);
 
     QValueAxis *yAxis = new QValueAxis;
@@ -34,6 +35,11 @@ void ECGGraphWidget::setupGraph()
     ecgSeries->attachAxis(xAxis);
     ecgSeries->attachAxis(yAxis);
     ecgSeries->setUseOpenGL(true);
+
+    //interpolation effect
+    ecgSeries->setPointsVisible(true);
+    ecgSeries->setPointLabelsVisible(true);
+    ecgSeries->setPointLabelsFormat("(@xPoint, @yPoint)");
 
     QPen pen = ecgSeries->pen();
     pen.setWidth(1);
