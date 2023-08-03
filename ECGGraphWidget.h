@@ -18,19 +18,19 @@ public:
     explicit ECGGraphWidget(QWidget *parent = nullptr);
 
 signals:
-    void dataProcessed(QStringList);
+    void dataProcessed(QStringList,QString);
 
 private slots:
     void startReading();
-    void updateECGData(QStringList);
+    void updateData(QStringList, QString);
     void saveData();
 
 private:
-    QVector<QPointF> dataPoints;
+    QVector<QPointF> ecgDataPoints, tempDataPoints;
 
-    QLineSeries *ecgSeries;
-    QChart *ecgChart;
-    QChartView *chartView;
+    QLineSeries *ecgSeries, *tmpSeries;
+    QChart *ecgChart, *tmpChart;
+    QChartView *chartView, *tmpChartView;
 
     qint64 lastReceivedTimestamp;
     QSerialPort serialPort;

@@ -10,54 +10,109 @@ ECGGraphWidget::ECGGraphWidget(QWidget *parent) : QWidget(parent)
 
     QtConcurrent::run(this, &ECGGraphWidget::startReading);
 
-    connect(this, &ECGGraphWidget::dataProcessed, this, &ECGGraphWidget::updateECGData);
+    connect(this, &ECGGraphWidget::dataProcessed, this, &ECGGraphWidget::updateData);
 }
 
 void ECGGraphWidget::setupGraph()
 {
+    //SETUP ECG CHART
+
+    QMargins margins(0, 0, 0, 0);
+
+    QPen pen;
+    pen.setWidth(1);
+    pen.setColor(Qt::red);
+
+    QPalette palette;
+    palette.setColor(QPalette::Window, Qt::white);
+
     ecgSeries = new QLineSeries();
+    tmpSeries = new QLineSeries();
+
+    QValueAxis *xAxis = new QValueAxis;
+    //xAxis->setTitleText("Time");
+    xAxis->setTickCount(10);
+    xAxis->setReverse(true);
+    xAxis->setLabelsVisible(true);
+
+    QValueAxis *yAxis = new QValueAxis;
+    //yAxis->setTitleText("Amplitude");
+    yAxis->setLabelsVisible(true);
+
+    QValueAxis *xAxisTmp = new QValueAxis;
+    //xAxis->setTitleText("Time");
+    xAxisTmp->setTickCount(10);
+    xAxisTmp->setLabelsVisible(true);
+    xAxisTmp->setReverse(true);
+
+    QValueAxis *yAxisTmp = new QValueAxis;
+    //yAxisTmp->setTitleText("Amplitude");
+    yAxisTmp->setLabelsVisible(true);
 
     ecgChart = new QChart();
     ecgChart->addSeries(ecgSeries);
-    ecgChart->setTitle("ECG Chart");
+    //ecgChart->setTitle("ECG");
     ecgChart->legend()->setVisible(false);
-
-    QValueAxis *xAxis = new QValueAxis;
-    xAxis->setTitleText("Time");
-    xAxis->setTickCount(10);
-    xAxis->setReverse(true);
     ecgChart->addAxis(xAxis, Qt::AlignBottom);
-
-    QValueAxis *yAxis = new QValueAxis;
-    yAxis->setTitleText("Amplitude");
     ecgChart->addAxis(yAxis, Qt::AlignLeft);
+    ecgChart->setMargins(margins);
 
     ecgSeries->attachAxis(xAxis);
     ecgSeries->attachAxis(yAxis);
     ecgSeries->setUseOpenGL(true);
-
-    //interpolation effect
     ecgSeries->setPointsVisible(true);
     ecgSeries->setPointLabelsVisible(true);
     ecgSeries->setPointLabelsFormat("(@xPoint, @yPoint)");
-
-    QPen pen = ecgSeries->pen();
-    pen.setWidth(1);
-    pen.setColor(Qt::red);
     ecgSeries->setPen(pen);
 
     chartView = new QChartView(ecgChart);
     chartView->setRenderHint(QPainter::Antialiasing);
+    chartView->setContentsMargins(margins);
+    chartView->setPalette(palette);
+    chartView->setStyleSheet("QChartView { border: 1px solid black; }");
+    chartView->setFrameShape(QFrame::Box);
+
+    //SETUP TEMPRATURE CHART
+    tmpChart = new QChart();
+    tmpChart->addSeries(tmpSeries);
+    //tmpChart->setTitle("Temprature");
+    tmpChart->legend()->setVisible(false);
+    tmpChart->addAxis(xAxisTmp, Qt::AlignBottom);
+    tmpChart->setMargins(margins);
+
+    tmpSeries->attachAxis(xAxisTmp);
+    tmpSeries->attachAxis(yAxisTmp);
+    tmpSeries->setUseOpenGL(true);
+    tmpSeries->setPointsVisible(true);
+    tmpSeries->setPointLabelsVisible(true);
+    tmpSeries->setPointLabelsFormat("(@xPoint, @yPoint)");
+    tmpSeries->setPen(pen);
+
+    tmpChartView = new QChartView(tmpChart);
+    tmpChartView->setRenderHint(QPainter::Antialiasing);
+    tmpChartView->setContentsMargins(margins);
+    tmpChartView->setPalette(palette);
+    tmpChartView->setStyleSheet("QChartView { border: 1px solid black; }");
+    tmpChartView->setFrameShape(QFrame::Box);
 
     QPushButton *saveButton = new QPushButton("Save Data", this);
     saveButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 
+    QLabel *ecgLabel = new QLabel("ECG");
+    ecgLabel->setAlignment(Qt::AlignCenter);
+
+    QLabel *tmpLabel = new QLabel("TEMPRATURE");
+    tmpLabel->setAlignment(Qt::AlignCenter);
+
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->addWidget(chartView);
+    mainLayout->addWidget(ecgLabel);
+    mainLayout->addWidget(tmpChartView);
+    mainLayout->addWidget(tmpLabel);
     mainLayout->addWidget(saveButton);
 
     this->setLayout(mainLayout);
-    this->resize(1500,900);
+    this->resize(1200,600);
 
     connect(saveButton, &QPushButton::clicked, this, &ECGGraphWidget::saveData);
 }
@@ -82,7 +137,7 @@ void ECGGraphWidget::setupSerialPort()
 
 void ECGGraphWidget::startReading()
 {
-    QStringList dataPoints;
+    QStringList ecgDataPoints,tempDataPoints;
     QByteArray readBuffer;
 
     while (true)
@@ -93,21 +148,24 @@ void ECGGraphWidget::startReading()
 
         while (readBuffer.size() >= 3)
         {
-            if ((readBuffer.at(0)) == '\xAA')
+            if (readBuffer.at(0) == '\xAA' || readBuffer.at(0) == '\xBB')
             {
                 uchar lsb = static_cast<uchar>(readBuffer.at(1));
                 uchar msb = static_cast<uchar>(readBuffer.at(2));
 
-                int ecgValue = (msb << 8) | lsb;
+                int value = (msb << 8) | lsb;
                 qint64 timestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
 
-                dataPoints.append(QString::number(timestamp)+"|"+QString::number(ecgValue));
+                if(readBuffer.at(0) == '\xAA')
+                    ecgDataPoints.append(QString::number(timestamp) + "|" + QString::number(value));
+                else if(readBuffer.at(0) == '\xBB')
+                    tempDataPoints.append(QString::number(timestamp) + "|" + QString::number(value));
 
                 if (timestamp - lastReceivedTimestamp >= 50)
                 {
                     qDebug() << "Update To Chart";
-                    emit dataProcessed(dataPoints);
-                    dataPoints.clear();
+                    emit dataProcessed(ecgDataPoints,"ECG");
+                    emit dataProcessed(ecgDataPoints,"TEMP");
                     lastReceivedTimestamp = timestamp;
                 }
                 readBuffer.remove(0, 3);
@@ -122,24 +180,40 @@ void ECGGraphWidget::startReading()
     }
 }
 
-void ECGGraphWidget::updateECGData(QStringList ecgList)
+void ECGGraphWidget::updateData(QStringList list,QString type)
 {
-    qDebug() << "updateECGData : " << ecgList.size();
-
-    for (int i = 0 ; i < ecgList.size() ; i++)
+    if(type.compare("ECG")==0)
     {
-        qint64 timestamp = ecgList.at(i).split("|").at(0).toLongLong();
-        int ecgValue = ecgList.at(i).split("|").at(1).toInt();
-        dataPoints.append(QPointF(timestamp, ecgValue));
+        for (int i = 0 ; i < list.size() ; i++)
+        {
+            qint64 timestamp = list.at(i).split("|").at(0).toLongLong();
+            int ecgValue = list.at(i).split("|").at(1).toInt();
+            ecgDataPoints.append(QPointF(timestamp, ecgValue));
+        }
+
+        ecgSeries->replace(ecgDataPoints);
+
+        qint64 lastTimestamp = ecgDataPoints.last().x();
+
+        ecgChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
+        ecgChart->axisY()->setRange(0, 65536);
     }
+    else if(type.compare("TEMP")==0)
+    {
+        for (int i = 0 ; i < list.size() ; i++)
+        {
+            qint64 timestamp = list.at(i).split("|").at(0).toLongLong();
+            int ecgValue = list.at(i).split("|").at(1).toInt();
+            tempDataPoints.append(QPointF(timestamp, ecgValue));
+        }
 
-    ecgSeries->replace(dataPoints);
+        tmpSeries->replace(tempDataPoints);
 
-    qint64 firstTimestamp = dataPoints.first().x();
-    qint64 lastTimestamp = dataPoints.last().x();
+        qint64 lastTimestamp = tempDataPoints.last().x();
 
-    ecgChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
-    ecgChart->axisY()->setRange(0, 65536);
+        tmpChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
+        tmpChart->axisY()->setRange(0, 60);
+    }
 }
 
 void ECGGraphWidget::saveData()
@@ -154,7 +228,7 @@ void ECGGraphWidget::saveData()
     {
         QTextStream out(&file);
         // Save the data from the ecgData map to the file in the desired format
-        for (const QPointF& point : dataPoints)
+        for (const QPointF& point : ecgDataPoints)
         {
             qint64 timestamp = point.x();
             int ecgAmplitude = point.y();
