@@ -1,8 +1,12 @@
 #include "ECGGraphWidget.h"
-//#include "DataWorker.h"
 
 ECGGraphWidget::ECGGraphWidget(QWidget *parent) : QWidget(parent)
 {
+    QDesktopWidget *desktop = QApplication::desktop();
+    QRect availableGeometry = desktop->availableGeometry(this);
+    this->setGeometry(availableGeometry.x(), availableGeometry.y(), availableGeometry.width(), availableGeometry.height()-100);
+    this->move(availableGeometry.topLeft());
+
     lastReceivedTimestamp = 0;
 
     setupGraph();
@@ -78,6 +82,7 @@ void ECGGraphWidget::setupGraph()
     //tmpChart->setTitle("Temprature");
     tmpChart->legend()->setVisible(false);
     tmpChart->addAxis(xAxisTmp, Qt::AlignBottom);
+    tmpChart->addAxis(yAxisTmp, Qt::AlignLeft);
     tmpChart->setMargins(margins);
 
     tmpSeries->attachAxis(xAxisTmp);
@@ -112,14 +117,14 @@ void ECGGraphWidget::setupGraph()
     mainLayout->addWidget(saveButton);
 
     this->setLayout(mainLayout);
-    this->resize(1200,600);
+    //this->resize(1200,600);
 
     connect(saveButton, &QPushButton::clicked, this, &ECGGraphWidget::saveData);
 }
 
 void ECGGraphWidget::setupSerialPort()
 {
-    serialPort.setPortName("COM10");
+    serialPort.setPortName("COM12");
     serialPort.setBaudRate(QSerialPort::Baud115200);
     serialPort.setDataBits(QSerialPort::Data8);
     serialPort.setParity(QSerialPort::NoParity);
@@ -163,9 +168,10 @@ void ECGGraphWidget::startReading()
 
                 if (timestamp - lastReceivedTimestamp >= 50)
                 {
-                    qDebug() << "Update To Chart";
                     emit dataProcessed(ecgDataPoints,"ECG");
-                    emit dataProcessed(ecgDataPoints,"TEMP");
+                    emit dataProcessed(tempDataPoints,"TEMP");
+                    ecgDataPoints.clear();
+                    tempDataPoints.clear();
                     lastReceivedTimestamp = timestamp;
                 }
                 readBuffer.remove(0, 3);
@@ -182,8 +188,11 @@ void ECGGraphWidget::startReading()
 
 void ECGGraphWidget::updateData(QStringList list,QString type)
 {
+    if(list.isEmpty())
+        return;
+
     if(type.compare("ECG")==0)
-    {
+    {        
         for (int i = 0 ; i < list.size() ; i++)
         {
             qint64 timestamp = list.at(i).split("|").at(0).toLongLong();
@@ -203,8 +212,8 @@ void ECGGraphWidget::updateData(QStringList list,QString type)
         for (int i = 0 ; i < list.size() ; i++)
         {
             qint64 timestamp = list.at(i).split("|").at(0).toLongLong();
-            int ecgValue = list.at(i).split("|").at(1).toInt();
-            tempDataPoints.append(QPointF(timestamp, ecgValue));
+            int tmpValue = list.at(i).split("|").at(1).toInt();
+            tempDataPoints.append(QPointF(timestamp, tmpValue));
         }
 
         tmpSeries->replace(tempDataPoints);
@@ -212,7 +221,7 @@ void ECGGraphWidget::updateData(QStringList list,QString type)
         qint64 lastTimestamp = tempDataPoints.last().x();
 
         tmpChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
-        tmpChart->axisY()->setRange(0, 60);
+        tmpChart->axisY()->setRange(0, 250);
     }
 }
 
