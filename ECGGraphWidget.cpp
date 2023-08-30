@@ -2,8 +2,7 @@
 
 ECGGraphWidget::ECGGraphWidget(QWidget *parent) : QWidget(parent)
 {
-    QDesktopWidget *desktop = QApplication::desktop();
-    QRect availableGeometry = desktop->availableGeometry(this);
+    QRect availableGeometry = QApplication::desktop()->availableGeometry(this);
     this->setGeometry(availableGeometry.x(), availableGeometry.y(), availableGeometry.width(), availableGeometry.height()-100);
     this->move(availableGeometry.topLeft());
 
@@ -109,12 +108,29 @@ void ECGGraphWidget::setupGraph()
     QLabel *tmpLabel = new QLabel("TEMPRATURE");
     tmpLabel->setAlignment(Qt::AlignCenter);
 
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->addWidget(chartView);
-    mainLayout->addWidget(ecgLabel);
-    mainLayout->addWidget(tmpChartView);
-    mainLayout->addWidget(tmpLabel);
-    mainLayout->addWidget(saveButton);
+    QHBoxLayout *mainLayout = new QHBoxLayout(this);
+
+    QVBoxLayout *settingLayout = new QVBoxLayout(this);
+
+    QVBoxLayout *thresholdSettingLayout = new QVBoxLayout(this);
+    QLabel *thresholdLabel = new QLabel("Threshold");
+    QLineEdit *thresholdInput = new QLineEdit();
+    QPushButton *saveThreshold = new QPushButton("SAVE");
+    thresholdSettingLayout->addWidget(thresholdLabel);
+    thresholdSettingLayout->addWidget(thresholdInput);
+    thresholdSettingLayout->addWidget(saveThreshold);
+
+    settingLayout->addItem(thresholdSettingLayout);
+
+    QVBoxLayout *chartLayout = new QVBoxLayout(this);
+    chartLayout->addWidget(chartView);
+    chartLayout->addWidget(ecgLabel);
+    chartLayout->addWidget(tmpChartView);
+    chartLayout->addWidget(tmpLabel);
+    chartLayout->addWidget(saveButton);
+
+    mainLayout->addItem(settingLayout);
+    mainLayout->addItem(chartLayout);
 
     this->setLayout(mainLayout);
     //this->resize(1200,600);
