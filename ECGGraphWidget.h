@@ -32,7 +32,7 @@ private:
     QChart *ecgChart, *tmpChart;
     QChartView *chartView, *tmpChartView;
 
-    qint64 lastReceivedTimestamp;
+    qint64 startTimestamp, lastReceivedTimestamp;
     QSerialPort serialPort;
 
     void setupGraph();

@@ -7,6 +7,7 @@ ECGGraphWidget::ECGGraphWidget(QWidget *parent) : QWidget(parent)
     this->setGeometry(availableGeometry.x(), availableGeometry.y(), availableGeometry.width(), availableGeometry.height()-100);
     this->move(availableGeometry.topLeft());
 
+    startTimestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
     lastReceivedTimestamp = 0;
 
     setupGraph();
@@ -162,9 +163,9 @@ void ECGGraphWidget::startReading()
                 qint64 timestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
 
                 if(readBuffer.at(0) == '\xAA')
-                    ecgDataPoints.append(QString::number(timestamp) + "|" + QString::number(value));
+                    ecgDataPoints.append(QString::number(timestamp - startTimestamp) + "|" + QString::number(value));
                 else if(readBuffer.at(0) == '\xBB')
-                    tempDataPoints.append(QString::number(timestamp) + "|" + QString::number(value));
+                    tempDataPoints.append(QString::number(timestamp - startTimestamp) + "|" + QString::number(value));
 
                 if (timestamp - lastReceivedTimestamp >= 50)
                 {
@@ -181,8 +182,6 @@ void ECGGraphWidget::startReading()
                 readBuffer.remove(0, 1);
             }
         }
-
-        QThread::msleep(10);
     }
 }
 
@@ -205,7 +204,7 @@ void ECGGraphWidget::updateData(QStringList list,QString type)
         qint64 lastTimestamp = ecgDataPoints.last().x();
 
         ecgChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
-        ecgChart->axisY()->setRange(0, 65536);
+        ecgChart->axisY()->setRange(0, 32768); //changed from 65536
     }
     else if(type.compare("TEMP")==0)
     {
@@ -221,7 +220,7 @@ void ECGGraphWidget::updateData(QStringList list,QString type)
         qint64 lastTimestamp = tempDataPoints.last().x();
 
         tmpChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
-        tmpChart->axisY()->setRange(0, 250);
+        tmpChart->axisY()->setRange(0, 65536);
     }
 }
 
