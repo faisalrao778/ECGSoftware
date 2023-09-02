@@ -28,19 +28,21 @@ signals:
 private:
     Ui::MainWindow *ui;
 
-    QVector<QPointF> ecgDataPoints, tempDataPoints;
+    QVector<QPointF> ecgDataPoints, tempDataPoints, thresholdPoints;
 
     QLineSeries *ecgSeries, *tmpSeries, *thresholdSeries;
+    QScatterSeries *thresholdMarkers;
     QChart *ecgChart, *tmpChart;
     QChartView *chartView, *tmpChartView;
 
-    qint64 lastReceivedTimestamp;
-    quint8 threshold;
+    qint64 startTimestamp, lastReceivedTimestamp;
+    quint16 threshold;
 
     QSerialPort serialPort;
 
     void setupGraph();
     void setupSerialPort();
+    void closeEvent(QCloseEvent *event);
 
 private slots:
     void startReading();

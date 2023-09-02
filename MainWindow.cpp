@@ -9,15 +9,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     this->setGeometry(availableGeometry.x(), availableGeometry.y(), availableGeometry.width(), availableGeometry.height()-100);
     this->move(availableGeometry.topLeft());
 
+    startTimestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
     lastReceivedTimestamp = 0;
-    threshold = 0;
+    threshold = 25000;
 
     ui->lineEdit_threshold->setText(QString::number(threshold));
 
     setupGraph();
     setupSerialPort();
-
-    QtConcurrent::run(this, &MainWindow::startReading);
 
     connect(this, &MainWindow::dataProcessed, this, &MainWindow::updateData);
 }
@@ -33,8 +32,9 @@ void MainWindow::setupGraph()
     pen.setColor(Qt::red);
 
     QPen pen_threshold;
-    pen_threshold.setWidth(1);
-    pen_threshold.setColor(Qt::blue);
+    pen_threshold.setStyle(Qt::DashDotDotLine);
+    pen_threshold.setWidth(2);
+    pen_threshold.setColor(Qt::darkRed);
 
     QPalette palette;
     palette.setColor(QPalette::Window, Qt::white);
@@ -42,6 +42,7 @@ void MainWindow::setupGraph()
     ecgSeries = new QLineSeries();
     tmpSeries = new QLineSeries();
     thresholdSeries = new QLineSeries();
+    thresholdMarkers = new QScatterSeries();
 
     QValueAxis *xAxis = new QValueAxis;
     //xAxis->setTitleText("Time");
@@ -66,6 +67,7 @@ void MainWindow::setupGraph()
     ecgChart = new QChart();
     ecgChart->addSeries(ecgSeries);
     ecgChart->addSeries(thresholdSeries);
+    ecgChart->addSeries(thresholdMarkers);
     //ecgChart->setTitle("ECG");
     ecgChart->legend()->setVisible(false);
     ecgChart->addAxis(xAxis, Qt::AlignBottom);
@@ -80,6 +82,16 @@ void MainWindow::setupGraph()
     ecgSeries->setPointLabelsFormat("(@xPoint, @yPoint)");
     ecgSeries->setPen(pen);
 
+    thresholdSeries->attachAxis(xAxis);
+    thresholdSeries->attachAxis(yAxis);
+    thresholdSeries->setPen(pen_threshold);
+
+    thresholdMarkers->attachAxis(xAxis);
+    thresholdMarkers->attachAxis(yAxis);
+    thresholdMarkers->setMarkerSize(10);
+    thresholdMarkers->setColor(Qt::red);
+    thresholdMarkers->setMarkerShape(QScatterSeries::MarkerShapeRectangle);
+
     chartView = new QChartView(ecgChart);
     chartView->setRenderHint(QPainter::Antialiasing);
     chartView->setContentsMargins(margins);
@@ -89,6 +101,7 @@ void MainWindow::setupGraph()
     chartView->setMinimumWidth(600);
 
     //SETUP TEMPRATURE CHART
+
     tmpChart = new QChart();
     tmpChart->addSeries(tmpSeries);
     //tmpChart->setTitle("Temprature");
@@ -115,6 +128,12 @@ void MainWindow::setupGraph()
 
     ui->gridLayout->addWidget(chartView);
     ui->gridLayout_2->addWidget(tmpChartView);
+
+    ecgChart->axisY()->setRange(0, 32768);
+    tmpChart->axisY()->setRange(0, 65536);
+
+    thresholdSeries->append(0,threshold);
+    thresholdSeries->append(1000,threshold);
 }
 
 void MainWindow::setupSerialPort()
@@ -133,6 +152,7 @@ void MainWindow::setupSerialPort()
     }
 
     qDebug() << "Opened Serial Port!";
+    QtConcurrent::run(this, &MainWindow::startReading);
 }
 
 void MainWindow::startReading()
@@ -157,9 +177,9 @@ void MainWindow::startReading()
                 qint64 timestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
 
                 if(readBuffer.at(0) == '\xAA')
-                    ecgDataPoints.append(QString::number(timestamp) + "|" + QString::number(value));
+                    ecgDataPoints.append(QString::number(timestamp - startTimestamp) + "|" + QString::number(value));
                 else if(readBuffer.at(0) == '\xBB')
-                    tempDataPoints.append(QString::number(timestamp) + "|" + QString::number(value));
+                    tempDataPoints.append(QString::number(timestamp - startTimestamp) + "|" + QString::number(value));
 
                 if (timestamp - lastReceivedTimestamp >= 50)
                 {
@@ -176,8 +196,6 @@ void MainWindow::startReading()
                 readBuffer.remove(0, 1);
             }
         }
-
-        QThread::msleep(10);
     }
 }
 
@@ -193,14 +211,21 @@ void MainWindow::updateData(QStringList list,QString type)
             qint64 timestamp = list.at(i).split("|").at(0).toLongLong();
             int ecgValue = list.at(i).split("|").at(1).toInt();
             ecgDataPoints.append(QPointF(timestamp, ecgValue));
+            if(ecgValue > threshold)
+                thresholdPoints.append(QPointF(timestamp, 2000));
         }
 
         ecgSeries->replace(ecgDataPoints);
+        thresholdMarkers->replace(thresholdPoints);
 
         qint64 lastTimestamp = ecgDataPoints.last().x();
 
         ecgChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
-        ecgChart->axisY()->setRange(0, 65536);
+        ecgChart->axisY()->setRange(0, 32768);
+
+        thresholdSeries->clear();
+        thresholdSeries->append(lastTimestamp - 3000, threshold);
+        thresholdSeries->append(lastTimestamp, threshold);
     }
     else if(type.compare("TEMP")==0)
     {
@@ -216,7 +241,7 @@ void MainWindow::updateData(QStringList list,QString type)
         qint64 lastTimestamp = tempDataPoints.last().x();
 
         tmpChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
-        tmpChart->axisY()->setRange(0, 250);
+        tmpChart->axisY()->setRange(0, 65536);
     }
 }
 
@@ -255,11 +280,20 @@ void MainWindow::on_pushButton_data_save_clicked()
 
 void MainWindow::on_pushButton_threshold_save_clicked()
 {
-    if(ui->lineEdit_threshold->text().toUInt() < 0 || ui->lineEdit_threshold->text().toUInt() > 255)
+    if(ui->lineEdit_threshold->text().toUInt() < 0 || ui->lineEdit_threshold->text().toUInt() > 65536)
     {
         QMessageBox::critical(this, "Error", "Threshould should be in Range: [0-255]");
         return;
     }
 
     threshold = ui->lineEdit_threshold->text().toUInt();
+    thresholdSeries->clear();
+    thresholdSeries->append(0,threshold);
+    thresholdSeries->append(100,threshold);
+}
+
+void MainWindow::closeEvent(QCloseEvent *event) {
+    // Close the serial port here
+    serialPort.close(); // Replace serialPort with your QSerialPort instance
+    QMainWindow::closeEvent(event);
 }
