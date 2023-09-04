@@ -11,7 +11,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     startTimestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
     lastReceivedTimestamp = 0;
-    threshold = 25000;
+    threshold = 200;
 
     ui->lineEdit_threshold->setText(QString::number(threshold));
 
@@ -32,7 +32,7 @@ void MainWindow::setupGraph()
     pen.setColor(Qt::red);
 
     QPen pen_threshold;
-    pen_threshold.setStyle(Qt::DashDotDotLine);
+    pen_threshold.setStyle(Qt::SolidLine);
     pen_threshold.setWidth(2);
     pen_threshold.setColor(Qt::darkRed);
 
@@ -129,8 +129,8 @@ void MainWindow::setupGraph()
     ui->gridLayout->addWidget(chartView);
     ui->gridLayout_2->addWidget(tmpChartView);
 
-    ecgChart->axisY()->setRange(0, 32768);
-    tmpChart->axisY()->setRange(0, 65536);
+    ecgChart->axisY()->setRange(0, 256);
+    tmpChart->axisY()->setRange(0, 256);
 
     thresholdSeries->append(0,threshold);
     thresholdSeries->append(1000,threshold);
@@ -176,10 +176,14 @@ void MainWindow::startReading()
                 int value = (msb << 8) | lsb;
                 qint64 timestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
 
+                //int dataValue = static_cast<int>((static_cast<double>(value) / 65535.00) * 256);
+                double dataValue = (static_cast<double>(value) / 65535.00) * 256.00;
+                QString val = QString::number(timestamp - startTimestamp) + "|" + QString::number(dataValue);
+
                 if(readBuffer.at(0) == '\xAA')
-                    ecgDataPoints.append(QString::number(timestamp - startTimestamp) + "|" + QString::number(value));
+                    ecgDataPoints.append(val);
                 else if(readBuffer.at(0) == '\xBB')
-                    tempDataPoints.append(QString::number(timestamp - startTimestamp) + "|" + QString::number(value));
+                    tempDataPoints.append(val);
 
                 if (timestamp - lastReceivedTimestamp >= 50)
                 {
@@ -190,6 +194,12 @@ void MainWindow::startReading()
                     lastReceivedTimestamp = timestamp;
                 }
                 readBuffer.remove(0, 3);
+            }
+            else if(readBuffer.at(0) == '\xCC')
+            {
+                QByteArray data;
+                data.append(static_cast<char>(threshold));
+                serialPort.write(data);
             }
             else
             {
@@ -209,10 +219,10 @@ void MainWindow::updateData(QStringList list,QString type)
         for (int i = 0 ; i < list.size() ; i++)
         {
             qint64 timestamp = list.at(i).split("|").at(0).toLongLong();
-            int ecgValue = list.at(i).split("|").at(1).toInt();
+            double ecgValue = list.at(i).split("|").at(1).toDouble();
             ecgDataPoints.append(QPointF(timestamp, ecgValue));
-            if(ecgValue > threshold)
-                thresholdPoints.append(QPointF(timestamp, 2000));
+            if(ecgValue > static_cast<double>(threshold))
+                thresholdPoints.append(QPointF(timestamp, 16));
         }
 
         ecgSeries->replace(ecgDataPoints);
@@ -221,7 +231,7 @@ void MainWindow::updateData(QStringList list,QString type)
         qint64 lastTimestamp = ecgDataPoints.last().x();
 
         ecgChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
-        ecgChart->axisY()->setRange(0, 32768);
+        ecgChart->axisY()->setRange(0, 256);
 
         thresholdSeries->clear();
         thresholdSeries->append(lastTimestamp - 3000, threshold);
@@ -232,7 +242,7 @@ void MainWindow::updateData(QStringList list,QString type)
         for (int i = 0 ; i < list.size() ; i++)
         {
             qint64 timestamp = list.at(i).split("|").at(0).toLongLong();
-            int tmpValue = list.at(i).split("|").at(1).toInt();
+            double tmpValue = list.at(i).split("|").at(1).toDouble();
             tempDataPoints.append(QPointF(timestamp, tmpValue));
         }
 
@@ -241,7 +251,7 @@ void MainWindow::updateData(QStringList list,QString type)
         qint64 lastTimestamp = tempDataPoints.last().x();
 
         tmpChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
-        tmpChart->axisY()->setRange(0, 65536);
+        tmpChart->axisY()->setRange(0, 256);
     }
 }
 
@@ -280,7 +290,7 @@ void MainWindow::on_pushButton_data_save_clicked()
 
 void MainWindow::on_pushButton_threshold_save_clicked()
 {
-    if(ui->lineEdit_threshold->text().toUInt() < 0 || ui->lineEdit_threshold->text().toUInt() > 65536)
+    if(ui->lineEdit_threshold->text().toUInt() < 0 || ui->lineEdit_threshold->text().toUInt() > 255)
     {
         QMessageBox::critical(this, "Error", "Threshould should be in Range: [0-255]");
         return;

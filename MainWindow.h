@@ -36,7 +36,7 @@ private:
     QChartView *chartView, *tmpChartView;
 
     qint64 startTimestamp, lastReceivedTimestamp;
-    quint16 threshold;
+    quint8 threshold;
 
     QSerialPort serialPort;
 
