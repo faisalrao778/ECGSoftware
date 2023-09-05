@@ -145,7 +145,9 @@ void MainWindow::setupSerialPort()
     serialPort.setStopBits(QSerialPort::OneStop);
     serialPort.setFlowControl(QSerialPort::NoFlowControl);
 
-    if (!serialPort.open(QIODevice::ReadOnly))
+    connect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
+
+    if (!serialPort.open(QIODevice::ReadWrite))
     {
         qDebug() << "Failed To Open Serial Port!";
         return;
@@ -154,6 +156,20 @@ void MainWindow::setupSerialPort()
     qDebug() << "Opened Serial Port!";
     QtConcurrent::run(this, &MainWindow::startReading);
 }
+void MainWindow::handleError(QSerialPort::SerialPortError error)
+    {
+        if (error == QSerialPort::ResourceError)
+        {
+            qDebug() << "Serial port closed or encountered a resource error. Reopening...";
+            if (!serialPort.open(QIODevice::ReadWrite))
+            {
+                qDebug() << "Failed To Open Serial Port!";
+                return;
+            }
+
+            qDebug() << "Opened Serial Port!";
+        }
+    }
 
 void MainWindow::startReading()
 {
@@ -197,9 +213,11 @@ void MainWindow::startReading()
             }
             else if(readBuffer.at(0) == '\xCC')
             {
+                qDebug() << "Receieved 0xcc";
                 QByteArray data;
                 data.append(static_cast<char>(threshold));
-                serialPort.write(data);
+                int len = serialPort.write(data);
+                qDebug() << len << " Byte Written";
             }
             else
             {

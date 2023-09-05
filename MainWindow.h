@@ -22,6 +22,8 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+public slots:
+    void handleError(QSerialPort::SerialPortError error);
 signals:
     void dataProcessed(QStringList,QString);
 
