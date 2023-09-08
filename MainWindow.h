@@ -26,6 +26,7 @@ public slots:
     void handleError(QSerialPort::SerialPortError error);
 signals:
     void dataProcessed(QStringList,QString);
+    void emitWriteData(QByteArray data);
 
 private:
     Ui::MainWindow *ui;
@@ -51,6 +52,7 @@ private slots:
     void updateData(QStringList, QString);
     void on_pushButton_data_save_clicked();
     void on_pushButton_threshold_save_clicked();
+    void writeData(QByteArray data);
 };
 
 #endif // MAINWINDOW_H

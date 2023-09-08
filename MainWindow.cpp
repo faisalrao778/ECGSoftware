@@ -143,9 +143,10 @@ void MainWindow::setupSerialPort()
     serialPort.setDataBits(QSerialPort::Data8);
     serialPort.setParity(QSerialPort::NoParity);
     serialPort.setStopBits(QSerialPort::OneStop);
-    serialPort.setFlowControl(QSerialPort::NoFlowControl);
+    //serialPort.setFlowControl(QSerialPort::NoFlowControl);
 
     connect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
+    connect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
 
     if (!serialPort.open(QIODevice::ReadWrite))
     {
@@ -154,22 +155,28 @@ void MainWindow::setupSerialPort()
     }
 
     qDebug() << "Opened Serial Port!";
+
+    QByteArray data;
+    data.append(static_cast<char>(threshold));
+    emit emitWriteData(data);
+
     QtConcurrent::run(this, &MainWindow::startReading);
 }
-void MainWindow::handleError(QSerialPort::SerialPortError error)
-    {
-        if (error == QSerialPort::ResourceError)
-        {
-            qDebug() << "Serial port closed or encountered a resource error. Reopening...";
-            if (!serialPort.open(QIODevice::ReadWrite))
-            {
-                qDebug() << "Failed To Open Serial Port!";
-                return;
-            }
 
-            qDebug() << "Opened Serial Port!";
+void MainWindow::handleError(QSerialPort::SerialPortError error)
+{
+    if (error == QSerialPort::ResourceError)
+    {
+        qDebug() << "Serial port closed or encountered a resource error. Reopening...";
+        if (!serialPort.open(QIODevice::ReadWrite))
+        {
+            qDebug() << "Failed To Open Serial Port!";
+            return;
         }
+
+        qDebug() << "Opened Serial Port!";
     }
+}
 
 void MainWindow::startReading()
 {
@@ -216,14 +223,35 @@ void MainWindow::startReading()
                 qDebug() << "Receieved 0xcc";
                 QByteArray data;
                 data.append(static_cast<char>(threshold));
-                int len = serialPort.write(data);
-                qDebug() << len << " Byte Written";
+                emit emitWriteData(data);
+                readBuffer.remove(0, 1);
             }
             else
             {
                 readBuffer.remove(0, 1);
             }
         }
+    }
+}
+
+void MainWindow::writeData(QByteArray data)
+{
+
+    if(serialPort.isWritable())
+    {
+        int len = serialPort.write(data);
+        if (len == -1)
+        {
+            qDebug() << "Error writing to serial port: " << serialPort.errorString();
+        }
+        else
+        {
+            qDebug() << len << " Byte Written";
+        }
+    }
+    else
+    {
+        qDebug() <<"Serial port not writable";
     }
 }
 
@@ -276,6 +304,7 @@ void MainWindow::updateData(QStringList list,QString type)
 MainWindow::~MainWindow()
 {
     delete ui;
+    QCoreApplication::quit();
 }
 
 void MainWindow::on_pushButton_data_save_clicked()
