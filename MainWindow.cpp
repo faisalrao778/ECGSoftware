@@ -1,12 +1,14 @@
 #include "MainWindow.h"
 #include "ui_MainWindow.h"
 
+#define CHART_WIDTH 1400
+#define CHART_HEIGHT 400
+
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
 
     QRect availableGeometry = QApplication::desktop()->availableGeometry(this);
-    this->setGeometry(availableGeometry.x(), availableGeometry.y(), availableGeometry.width(), availableGeometry.height()-100);
     this->move(availableGeometry.topLeft());
 
     startTimestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
@@ -24,9 +26,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 void MainWindow::setupGraph()
 {
     //SETUP ECG CHART
-
-    QMargins margins(0, 0, 0, 0);
-
     QPen pen;
     pen.setWidth(1);
     pen.setColor(Qt::red);
@@ -44,71 +43,63 @@ void MainWindow::setupGraph()
     thresholdSeries = new QLineSeries();
     thresholdMarkers = new QScatterSeries();
 
-    QValueAxis *xAxis = new QValueAxis;
-    //xAxis->setTitleText("Time");
-    xAxis->setTickCount(10);
-    xAxis->setReverse(true);
-    xAxis->setLabelsVisible(true);
+    QValueAxis *xAxisEcg = new QValueAxis;
+    xAxisEcg->setTickCount(10);
+    xAxisEcg->setReverse(true);
+    xAxisEcg->setLabelsVisible(false);
 
-    QValueAxis *yAxis = new QValueAxis;
-    //yAxis->setTitleText("Amplitude");
-    yAxis->setLabelsVisible(true);
+    QValueAxis *yAxisEcg = new QValueAxis;
+    yAxisEcg->setLabelsVisible(false);
 
     QValueAxis *xAxisTmp = new QValueAxis;
-    //xAxis->setTitleText("Time");
     xAxisTmp->setTickCount(10);
-    xAxisTmp->setLabelsVisible(true);
     xAxisTmp->setReverse(true);
+    xAxisTmp->setLabelsVisible(false);
 
     QValueAxis *yAxisTmp = new QValueAxis;
-    //yAxisTmp->setTitleText("Amplitude");
-    yAxisTmp->setLabelsVisible(true);
+    yAxisTmp->setLabelsVisible(false);
 
     ecgChart = new QChart();
     ecgChart->addSeries(ecgSeries);
     ecgChart->addSeries(thresholdSeries);
     ecgChart->addSeries(thresholdMarkers);
-    //ecgChart->setTitle("ECG");
     ecgChart->legend()->setVisible(false);
-    ecgChart->addAxis(xAxis, Qt::AlignBottom);
-    ecgChart->addAxis(yAxis, Qt::AlignLeft);
-    ecgChart->setMargins(margins);
+    ecgChart->addAxis(xAxisEcg, Qt::AlignBottom);
+    ecgChart->addAxis(yAxisEcg, Qt::AlignLeft);
+    ecgChart->setPlotArea(QRect(0, 0, CHART_WIDTH, CHART_HEIGHT));
 
-    ecgSeries->attachAxis(xAxis);
-    ecgSeries->attachAxis(yAxis);
+    ecgSeries->attachAxis(xAxisEcg);
+    ecgSeries->attachAxis(yAxisEcg);
     ecgSeries->setUseOpenGL(true);
     ecgSeries->setPointsVisible(true);
     ecgSeries->setPointLabelsVisible(true);
     ecgSeries->setPointLabelsFormat("(@xPoint, @yPoint)");
     ecgSeries->setPen(pen);
 
-    thresholdSeries->attachAxis(xAxis);
-    thresholdSeries->attachAxis(yAxis);
+    thresholdSeries->attachAxis(xAxisEcg);
+    thresholdSeries->attachAxis(yAxisEcg);
     thresholdSeries->setPen(pen_threshold);
 
-    thresholdMarkers->attachAxis(xAxis);
-    thresholdMarkers->attachAxis(yAxis);
+    thresholdMarkers->attachAxis(xAxisEcg);
+    thresholdMarkers->attachAxis(yAxisEcg);
     thresholdMarkers->setMarkerSize(10);
     thresholdMarkers->setColor(Qt::red);
     thresholdMarkers->setMarkerShape(QScatterSeries::MarkerShapeRectangle);
 
     chartView = new QChartView(ecgChart);
     chartView->setRenderHint(QPainter::Antialiasing);
-    chartView->setContentsMargins(margins);
     chartView->setPalette(palette);
-    chartView->setStyleSheet("QChartView { border: 1px solid black; }");
     chartView->setFrameShape(QFrame::Box);
-    chartView->setMinimumWidth(600);
+    chartView->setFixedSize(QSize(CHART_WIDTH, CHART_HEIGHT));
 
     //SETUP TEMPRATURE CHART
 
     tmpChart = new QChart();
     tmpChart->addSeries(tmpSeries);
-    //tmpChart->setTitle("Temprature");
     tmpChart->legend()->setVisible(false);
     tmpChart->addAxis(xAxisTmp, Qt::AlignBottom);
     tmpChart->addAxis(yAxisTmp, Qt::AlignLeft);
-    tmpChart->setMargins(margins);
+    tmpChart->setPlotArea(QRect(0, 0, CHART_WIDTH, CHART_HEIGHT));
 
     tmpSeries->attachAxis(xAxisTmp);
     tmpSeries->attachAxis(yAxisTmp);
@@ -120,14 +111,12 @@ void MainWindow::setupGraph()
 
     tmpChartView = new QChartView(tmpChart);
     tmpChartView->setRenderHint(QPainter::Antialiasing);
-    tmpChartView->setContentsMargins(margins);
     tmpChartView->setPalette(palette);
-    tmpChartView->setStyleSheet("QChartView { border: 1px solid black; }");
     tmpChartView->setFrameShape(QFrame::Box);
-    tmpChartView->setMinimumWidth(600);
+    tmpChartView->setFixedSize(QSize(CHART_WIDTH, CHART_HEIGHT));
 
-    ui->gridLayout->addWidget(chartView);
-    ui->gridLayout_2->addWidget(tmpChartView);
+    ui->gridLayout_chart1->addWidget(chartView);
+    ui->gridLayout_chart2->addWidget(tmpChartView);
 
     ecgChart->axisY()->setRange(0, 256);
     tmpChart->axisY()->setRange(0, 256);
@@ -143,10 +132,9 @@ void MainWindow::setupSerialPort()
     serialPort.setDataBits(QSerialPort::Data8);
     serialPort.setParity(QSerialPort::NoParity);
     serialPort.setStopBits(QSerialPort::OneStop);
-    //serialPort.setFlowControl(QSerialPort::NoFlowControl);
 
-    connect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
     connect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
+    connect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
 
     if (!serialPort.open(QIODevice::ReadWrite))
     {
@@ -199,7 +187,6 @@ void MainWindow::startReading()
                 int value = (msb << 8) | lsb;
                 qint64 timestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
 
-                //int dataValue = static_cast<int>((static_cast<double>(value) / 65535.00) * 256);
                 double dataValue = (static_cast<double>(value) / 65535.00) * 256.00;
                 QString val = QString::number(timestamp - startTimestamp) + "|" + QString::number(dataValue);
 
@@ -220,7 +207,6 @@ void MainWindow::startReading()
             }
             else if(readBuffer.at(0) == '\xCC')
             {
-                qDebug() << "Receieved 0xcc";
                 QByteArray data;
                 data.append(static_cast<char>(threshold));
                 emit emitWriteData(data);
@@ -266,9 +252,11 @@ void MainWindow::updateData(QStringList list,QString type)
         {
             qint64 timestamp = list.at(i).split("|").at(0).toLongLong();
             double ecgValue = list.at(i).split("|").at(1).toDouble();
-            ecgDataPoints.append(QPointF(timestamp, ecgValue));
-            if(ecgValue > static_cast<double>(threshold))
+
+            if(ecgValue > static_cast<double>(threshold) && ecgValue > ecgDataPoints.last().y())
                 thresholdPoints.append(QPointF(timestamp, 16));
+
+            ecgDataPoints.append(QPointF(timestamp, ecgValue));
         }
 
         ecgSeries->replace(ecgDataPoints);
@@ -292,12 +280,14 @@ void MainWindow::updateData(QStringList list,QString type)
             tempDataPoints.append(QPointF(timestamp, tmpValue));
         }
 
-        tmpSeries->replace(tempDataPoints);
+        ui->label_temprature->setText(QString::number(tempDataPoints.last().y()));
 
-        qint64 lastTimestamp = tempDataPoints.last().x();
+//        tmpSeries->replace(tempDataPoints);
 
-        tmpChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
-        tmpChart->axisY()->setRange(0, 256);
+//        qint64 lastTimestamp = tempDataPoints.last().x();
+
+//        tmpChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
+//        tmpChart->axisY()->setRange(0, 256);
     }
 }
 
