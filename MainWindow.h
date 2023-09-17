@@ -24,6 +24,7 @@ public:
 
 public slots:
     void handleError(QSerialPort::SerialPortError error);
+
 signals:
     void dataProcessed(QStringList,QString);
     void emitWriteData(QByteArray data);
@@ -31,12 +32,13 @@ signals:
 private:
     Ui::MainWindow *ui;
 
-    QVector<QPointF> ecgDataPoints, tempDataPoints, thresholdPoints;
+    QVector<QPointF> ecgDataPoints, tempDataPoints, thresholdPoints, pressDataPoints;
 
     QLineSeries *ecgSeries, *tmpSeries, *thresholdSeries;
     QScatterSeries *thresholdMarkers;
     QChart *ecgChart, *tmpChart;
     QChartView *chartView, *tmpChartView;
+    bool isThresholdPassed;
 
     qint64 startTimestamp, lastReceivedTimestamp;
     quint8 threshold;

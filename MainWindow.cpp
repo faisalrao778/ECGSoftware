@@ -14,6 +14,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     startTimestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
     lastReceivedTimestamp = 0;
     threshold = 200;
+    isThresholdPassed = false;
 
     ui->lineEdit_threshold->setText(QString::number(threshold));
 
@@ -168,7 +169,7 @@ void MainWindow::handleError(QSerialPort::SerialPortError error)
 
 void MainWindow::startReading()
 {
-    QStringList ecgDataPoints,tempDataPoints;
+    QStringList ecgDataPoints,pressDataPoints,tempDataPoints;
     QByteArray readBuffer;
 
     while (true)
@@ -179,7 +180,7 @@ void MainWindow::startReading()
 
         while (readBuffer.size() >= 3)
         {
-            if (readBuffer.at(0) == '\xAA' || readBuffer.at(0) == '\xBB')
+            if (readBuffer.at(0) == '\xAA' || readBuffer.at(0) == '\xBB' || readBuffer.at(0) == '\xDD')
             {
                 uchar lsb = static_cast<uchar>(readBuffer.at(1));
                 uchar msb = static_cast<uchar>(readBuffer.at(2));
@@ -193,14 +194,19 @@ void MainWindow::startReading()
                 if(readBuffer.at(0) == '\xAA')
                     ecgDataPoints.append(val);
                 else if(readBuffer.at(0) == '\xBB')
+                    pressDataPoints.append(val);
+                else if(readBuffer.at(0) == '\xDD')
                     tempDataPoints.append(val);
 
                 if (timestamp - lastReceivedTimestamp >= 50)
                 {
                     emit dataProcessed(ecgDataPoints,"ECG");
                     emit dataProcessed(tempDataPoints,"TEMP");
+                    emit dataProcessed(pressDataPoints,"PRESS");
                     ecgDataPoints.clear();
                     tempDataPoints.clear();
+                    pressDataPoints.clear();
+
                     lastReceivedTimestamp = timestamp;
                 }
                 readBuffer.remove(0, 3);
@@ -253,8 +259,15 @@ void MainWindow::updateData(QStringList list,QString type)
             qint64 timestamp = list.at(i).split("|").at(0).toLongLong();
             double ecgValue = list.at(i).split("|").at(1).toDouble();
 
-            if(ecgValue > static_cast<double>(threshold) && ecgValue > ecgDataPoints.last().y())
+            if(ecgValue > static_cast<double>(threshold) && !isThresholdPassed)
+            {
                 thresholdPoints.append(QPointF(timestamp, 16));
+                isThresholdPassed = true;
+            }
+            else if(ecgValue < static_cast<double>(threshold) && isThresholdPassed)
+            {
+                isThresholdPassed = false;
+            }
 
             ecgDataPoints.append(QPointF(timestamp, ecgValue));
         }
@@ -281,13 +294,22 @@ void MainWindow::updateData(QStringList list,QString type)
         }
 
         ui->label_temprature->setText(QString::number(tempDataPoints.last().y()));
+    }
+    else if(type.compare("PRESS")==0)
+    {
+        for (int i = 0 ; i < list.size() ; i++)
+        {
+            qint64 timestamp = list.at(i).split("|").at(0).toLongLong();
+            double tmpValue = list.at(i).split("|").at(1).toDouble();
+            pressDataPoints.append(QPointF(timestamp, tmpValue));
+        }
 
-//        tmpSeries->replace(tempDataPoints);
+        tmpSeries->replace(tempDataPoints);
 
-//        qint64 lastTimestamp = tempDataPoints.last().x();
+        qint64 lastTimestamp = tempDataPoints.last().x();
 
-//        tmpChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
-//        tmpChart->axisY()->setRange(0, 256);
+        tmpChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
+        tmpChart->axisY()->setRange(0, 256);
     }
 }
 
