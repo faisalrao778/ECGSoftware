@@ -304,9 +304,9 @@ void MainWindow::updateData(QStringList list,QString type)
             pressDataPoints.append(QPointF(timestamp, tmpValue));
         }
 
-        tmpSeries->replace(tempDataPoints);
+        tmpSeries->replace(pressDataPoints);
 
-        qint64 lastTimestamp = tempDataPoints.last().x();
+        qint64 lastTimestamp = pressDataPoints.last().x();
 
         tmpChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
         tmpChart->axisY()->setRange(0, 256);
