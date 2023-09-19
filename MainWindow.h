@@ -10,9 +10,9 @@
 #include <QtCharts>
 #include <QtConcurrent>
 
-namespace Ui {
-    class MainWindow;
-}
+#include "DataManagementThread.h"
+
+namespace Ui {    class MainWindow;     }
 
 class MainWindow : public QMainWindow
 {
@@ -42,6 +42,8 @@ private:
 
     qint64 startTimestamp, lastReceivedTimestamp;
     quint8 threshold;
+
+    DataManagementThread *dataManagementThread;
 
     QSerialPort serialPort;
 

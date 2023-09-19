@@ -22,6 +22,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     setupSerialPort();
 
     connect(this, &MainWindow::dataProcessed, this, &MainWindow::updateData);
+    connect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
+    connect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
+
+    dataManagementThread = new DataManagementThread(ecgDataPoints, tempDataPoints, thresholdPoints, pressDataPoints);
+    dataManagementThread->start();
 }
 
 void MainWindow::setupGraph()
@@ -134,9 +139,6 @@ void MainWindow::setupSerialPort()
     serialPort.setParity(QSerialPort::NoParity);
     serialPort.setStopBits(QSerialPort::OneStop);
 
-    connect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
-    connect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
-
     if (!serialPort.open(QIODevice::ReadWrite))
     {
         qDebug() << "Failed To Open Serial Port!";
@@ -150,21 +152,6 @@ void MainWindow::setupSerialPort()
     emit emitWriteData(data);
 
     QtConcurrent::run(this, &MainWindow::startReading);
-}
-
-void MainWindow::handleError(QSerialPort::SerialPortError error)
-{
-    if (error == QSerialPort::ResourceError)
-    {
-        qDebug() << "Serial port closed or encountered a resource error. Reopening...";
-        if (!serialPort.open(QIODevice::ReadWrite))
-        {
-            qDebug() << "Failed To Open Serial Port!";
-            return;
-        }
-
-        qDebug() << "Opened Serial Port!";
-    }
 }
 
 void MainWindow::startReading()
@@ -223,27 +210,6 @@ void MainWindow::startReading()
                 readBuffer.remove(0, 1);
             }
         }
-    }
-}
-
-void MainWindow::writeData(QByteArray data)
-{
-
-    if(serialPort.isWritable())
-    {
-        int len = serialPort.write(data);
-        if (len == -1)
-        {
-            qDebug() << "Error writing to serial port: " << serialPort.errorString();
-        }
-        else
-        {
-            qDebug() << len << " Byte Written";
-        }
-    }
-    else
-    {
-        qDebug() <<"Serial port not writable";
     }
 }
 
@@ -313,10 +279,25 @@ void MainWindow::updateData(QStringList list,QString type)
     }
 }
 
-MainWindow::~MainWindow()
+void MainWindow::writeData(QByteArray data)
 {
-    delete ui;
-    QCoreApplication::quit();
+    if (serialPort.write(data) == -1)
+        qDebug() << "Error writing to serial port: " << serialPort.errorString();
+}
+
+void MainWindow::handleError(QSerialPort::SerialPortError error)
+{
+    if (error == QSerialPort::ResourceError)
+    {
+        qDebug() << "Serial port closed or encountered a resource error. Reopening...";
+        if (!serialPort.open(QIODevice::ReadWrite))
+        {
+            qDebug() << "Failed To Open Serial Port!";
+            return;
+        }
+
+        qDebug() << "Opened Serial Port!";
+    }
 }
 
 void MainWindow::on_pushButton_data_save_clicked()
@@ -361,8 +342,26 @@ void MainWindow::on_pushButton_threshold_save_clicked()
     thresholdSeries->append(100,threshold);
 }
 
-void MainWindow::closeEvent(QCloseEvent *event) {
-    // Close the serial port here
-    serialPort.close(); // Replace serialPort with your QSerialPort instance
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    qDebug() << "Closing...";
+    dataManagementThread->requestInterruption();
+    dataManagementThread->wait(); // Wait for the thread to finish
+
+    delete dataManagementThread;
+
+    disconnect(this, &MainWindow::dataProcessed, this, &MainWindow::updateData);
+    disconnect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
+    disconnect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
+
+    serialPort.close();
+
+    delete ui;
     QMainWindow::closeEvent(event);
+    QCoreApplication::quit();
+}
+
+MainWindow::~MainWindow()
+{
+
 }
