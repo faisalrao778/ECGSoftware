@@ -25,8 +25,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
     connect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
 
-    dataManagementThread = new DataManagementThread(ecgDataPoints, tempDataPoints, thresholdPoints, pressDataPoints);
-    dataManagementThread->start();
+    //dataManagementThread = new DataManagementThread(ecgDataPoints, tempDataPoints, thresholdPoints, pressDataPoints);
+    //dataManagementThread->start();
 }
 
 void MainWindow::setupGraph()
@@ -185,17 +185,18 @@ void MainWindow::startReading()
                 else if(readBuffer.at(0) == '\xDD')
                     tempDataPoints.append(val);
 
-                if (timestamp - lastReceivedTimestamp >= 50)
+                if (timestamp - lastReceivedTimestamp >= 100)
                 {
+                    lastReceivedTimestamp = timestamp;
+
                     emit dataProcessed(ecgDataPoints,"ECG");
                     emit dataProcessed(tempDataPoints,"TEMP");
                     emit dataProcessed(pressDataPoints,"PRESS");
                     ecgDataPoints.clear();
                     tempDataPoints.clear();
                     pressDataPoints.clear();
-
-                    lastReceivedTimestamp = timestamp;
                 }
+
                 readBuffer.remove(0, 3);
             }
             else if(readBuffer.at(0) == '\xCC')
@@ -277,6 +278,18 @@ void MainWindow::updateData(QStringList list,QString type)
         tmpChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
         tmpChart->axisY()->setRange(0, 256);
     }
+
+    while (ecgDataPoints.first().x() < lastReceivedTimestamp - 4000)
+        ecgDataPoints.removeFirst();
+
+    while (tempDataPoints.first().x() < lastReceivedTimestamp - 4000)
+        tempDataPoints.removeFirst();
+
+    while (thresholdPoints.first().x() < lastReceivedTimestamp - 4000)
+        thresholdPoints.removeFirst();
+
+    while (pressDataPoints.first().x() < lastReceivedTimestamp - 4000)
+        pressDataPoints.removeFirst();
 }
 
 void MainWindow::writeData(QByteArray data)
