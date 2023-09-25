@@ -19,9 +19,6 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    // Define a maximum size for your data vectors
-    const int MAX_VECTOR_SIZE = 25000; // Adjust this according to your needs
-
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
@@ -31,7 +28,6 @@ public slots:
 signals:
     void dataProcessed(QStringList,QString);
     void emitWriteData(QByteArray data);
-    void emitRemoveVectorData(QVector<QPointF> *);
 
 private:
     Ui::MainWindow *ui;
@@ -61,7 +57,6 @@ private slots:
     void on_pushButton_data_save_clicked();
     void on_pushButton_threshold_save_clicked();
     void writeData(QByteArray data);
-    void RemoveData(QVector<QPointF> *vector);
 };
 
 #endif // MAINWINDOW_H
