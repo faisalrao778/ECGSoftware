@@ -19,14 +19,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->lineEdit_threshold->setText(QString::number(threshold));
 
     setupGraph();
-    setupSerialPort();
+    //    setupSerialPort();
+    QtConcurrent::run(this, &MainWindow::simulation);
 
     connect(this, &MainWindow::dataProcessed, this, &MainWindow::updateData);
     connect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
     connect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
 
-    dataManagementThread = new DataManagementThread(startTimestamp, ecgDataPoints, tempDataPoints, thresholdPoints, pressDataPoints);
-    dataManagementThread->start();
+    //dataManagementThread = new DataManagementThread(&sharedMutex, startTimestamp, ecgDataPoints, tempDataPoints, thresholdPoints, pressDataPoints);
+    //dataManagementThread->start();
 }
 
 void MainWindow::setupGraph()
@@ -154,6 +155,34 @@ void MainWindow::setupSerialPort()
     QtConcurrent::run(this, &MainWindow::startReading);
 }
 
+void MainWindow::simulation()
+{
+    QStringList ecgDataPoints;
+
+    int minValue = 10000;
+    int maxValue = 35000;
+
+    while(true)
+    {
+        int value = qrand() % (maxValue - minValue + 1) + minValue;
+        qint64 timestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
+
+        double dataValue = (static_cast<double>(value) / 65535.00) * 256.00;
+        QString val = QString::number(timestamp - startTimestamp) + "|" + QString::number(dataValue);
+
+        ecgDataPoints.append(val);
+
+        if (timestamp - lastReceivedTimestamp >= 50)
+        {
+            lastReceivedTimestamp = timestamp;
+
+            emit dataProcessed(ecgDataPoints,"ECG");
+            ecgDataPoints.clear();
+        }
+        Sleep(1);
+    }
+}
+
 void MainWindow::startReading()
 {
     QStringList ecgDataPoints,pressDataPoints,tempDataPoints;
@@ -216,6 +245,8 @@ void MainWindow::startReading()
 
 void MainWindow::updateData(QStringList list,QString type)
 {
+    //sharedMutex.lock();
+
     if(list.isEmpty())
         return;
 
@@ -250,6 +281,8 @@ void MainWindow::updateData(QStringList list,QString type)
         thresholdSeries->clear();
         thresholdSeries->append(lastTimestamp - 3000, threshold);
         thresholdSeries->append(lastTimestamp, threshold);
+
+        qDebug() << ecgDataPoints.size();
     }
     else if(type.compare("TEMP")==0)
     {
@@ -278,6 +311,8 @@ void MainWindow::updateData(QStringList list,QString type)
         tmpChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
         tmpChart->axisY()->setRange(0, 256);
     }
+
+    //sharedMutex.unlock();
 }
 
 void MainWindow::writeData(QByteArray data)

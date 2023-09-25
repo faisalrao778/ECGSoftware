@@ -19,6 +19,8 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
+    QMutex sharedMutex;
+
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
@@ -53,6 +55,7 @@ private:
 
 private slots:
     void startReading();
+    void simulation();
     void updateData(QStringList, QString);
     void on_pushButton_data_save_clicked();
     void on_pushButton_threshold_save_clicked();

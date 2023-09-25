@@ -1,10 +1,11 @@
 #include "DataManagementThread.h"
 #include <QDebug>
 
-DataManagementThread::DataManagementThread(qint64& startTimestamp,
+DataManagementThread::DataManagementThread(QMutex *sharedMutex, qint64& startTimestamp,
                                            QVector<QPointF>& ecgDataPoints, QVector<QPointF>& tempDataPoints,
                                            QVector<QPointF>& thresholdPoints, QVector<QPointF>& pressDataPoints)
-    : startTimestamp_(startTimestamp),
+    : sharedMutex_(sharedMutex),
+      startTimestamp_(startTimestamp),
       ecgDataPoints_(ecgDataPoints),
       tempDataPoints_(tempDataPoints),
       thresholdPoints_(thresholdPoints),
@@ -28,6 +29,7 @@ void DataManagementThread::run() {
 
 void DataManagementThread::removeOldData(QVector<QPointF>& data, qint64 maxDataAge, QString remarks)
 {
+    //sharedMutex_->lock();
     qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
     int removedCount = 0;
 
@@ -36,6 +38,6 @@ void DataManagementThread::removeOldData(QVector<QPointF>& data, qint64 maxDataA
         data.removeFirst();
         removedCount++;
     }
-
+    //sharedMutex_->unlock();
     qDebug() << "Removed" << removedCount << "Old Data Points From" << remarks;
 }

@@ -5,17 +5,21 @@
 #include <QVector>
 #include <QPointF>
 #include <QDateTime>
+#include <QMutex>
 
 class DataManagementThread : public QThread
 {
     Q_OBJECT
 
 public:
-    DataManagementThread(qint64& startTimestamp,
+    DataManagementThread(QMutex *sharedMutex,
+                         qint64& startTimestamp,
                          QVector<QPointF>& ecgDataPoints,
                          QVector<QPointF>& tempDataPoints,
                          QVector<QPointF>& thresholdPoints,
                          QVector<QPointF>& pressDataPoints);
+
+    QMutex *sharedMutex_;
 
 protected:
     void run() override;
