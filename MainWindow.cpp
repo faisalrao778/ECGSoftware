@@ -20,14 +20,43 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     setupGraph();
     setupSerialPort();
+    //QtConcurrent::run(this, &MainWindow::simulation);
 
     connect(this, &MainWindow::dataProcessed, this, &MainWindow::updateData);
     connect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
     connect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
     connect(this, &MainWindow::emitRemoveVectorData, this, &MainWindow::RemoveData);
 
-    //dataManagementThread = new DataManagementThread(ecgDataPoints, tempDataPoints, thresholdPoints, pressDataPoints);
-    //dataManagementThread->start();
+    dataManagementThread = new DataManagementThread(&mutex, ecgDataPoints, tempDataPoints, thresholdPoints, pressDataPoints);
+    dataManagementThread->start();
+}
+
+void MainWindow::simulation()
+{
+    QStringList ecgDataPoints;
+
+    int minValue = 10000;
+    int maxValue = 35000;
+
+    while(true)
+    {
+        int value = qrand() % (maxValue - minValue + 1) + minValue;
+        qint64 timestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
+
+        double dataValue = (static_cast<double>(value) / 65535.00) * 256.00;
+        QString val = QString::number(timestamp - startTimestamp) + "|" + QString::number(dataValue);
+
+        ecgDataPoints.append(val);
+
+        if (timestamp - lastReceivedTimestamp >= 50)
+        {
+            lastReceivedTimestamp = timestamp;
+
+            emit dataProcessed(ecgDataPoints,"ECG");
+            ecgDataPoints.clear();
+        }
+        Sleep(1);
+    }
 }
 
 void MainWindow::setupGraph()
@@ -220,6 +249,8 @@ void MainWindow::updateData(QStringList list,QString type)
     if(list.isEmpty())
         return;
 
+    mutex.lock();
+
     if(type.compare("ECG")==0)
     {
         for (int i = 0 ; i < list.size() ; i++)
@@ -280,44 +311,18 @@ void MainWindow::updateData(QStringList list,QString type)
         tmpChart->axisY()->setRange(0, 256);
     }
 
-/*
-    qDebug()<<"ecgDataPoints.first.x"<<ecgDataPoints.count();
-    qDebug()<<"lastReceivedTimestamp"<<lastReceivedTimestamp;
-    qDebug()<<"tempDataPoints.first.x"<<tempDataPoints.count();
-    qDebug()<<"lastReceivedTimestamp"<<lastReceivedTimestamp;
-    qDebug()<<"thresholdPoints.first.x"<<thresholdPoints.count();
-    qDebug()<<"lastReceivedTimestamp"<<lastReceivedTimestamp;
-    qDebug()<<"pressDataPoints.first.x"<<pressDataPoints.count();
-    qDebug()<<"lastReceivedTimestamp"<<lastReceivedTimestamp;
-    */
-
-    emitRemoveVectorData(&ecgDataPoints);
-    emitRemoveVectorData(&tempDataPoints);
-    emitRemoveVectorData(&thresholdPoints);
-    emitRemoveVectorData(&pressDataPoints);
-
-    /*
-    while (ecgDataPoints.first().x() < lastReceivedTimestamp - 4000)
-        ecgDataPoints.removeFirst();
-
-    while (tempDataPoints.first().x() < lastReceivedTimestamp - 4000)
-        tempDataPoints.removeFirst();
-
-    while (thresholdPoints.first().x() < lastReceivedTimestamp - 4000)
-        thresholdPoints.removeFirst();
-
-    while (pressDataPoints.first().x() < lastReceivedTimestamp - 4000)
-        pressDataPoints.removeFirst();
-        */
+    mutex.unlock();
 }
+
 void MainWindow::RemoveData(QVector<QPointF> *vector)
 {
-    if (vector->size() > MAX_VECTOR_SIZE) {
-           // Calculate the number of elements to remove
-           int elementsToRemove = vector->size() - MAX_VECTOR_SIZE/2;
-           // Remove the oldest elements from the beginning of the vector
-           vector->remove(0, elementsToRemove);
-       }
+    if (vector->size() > MAX_VECTOR_SIZE)
+    {
+        // Calculate the number of elements to remove
+        int elementsToRemove = vector->size() - MAX_VECTOR_SIZE;
+        // Remove the oldest elements from the beginning of the vector
+        vector->remove(0, elementsToRemove);
+    }
 }
 
 void MainWindow::writeData(QByteArray data)

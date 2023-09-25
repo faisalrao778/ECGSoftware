@@ -21,6 +21,7 @@ class MainWindow : public QMainWindow
 public:
     // Define a maximum size for your data vectors
     const int MAX_VECTOR_SIZE = 25000; // Adjust this according to your needs
+    QMutex mutex;
 
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
@@ -56,6 +57,7 @@ private:
     void closeEvent(QCloseEvent *event);
 
 private slots:
+    void simulation();
     void startReading();
     void updateData(QStringList, QString);
     void on_pushButton_data_save_clicked();
