@@ -12,10 +12,9 @@ class DataManagementThread : public QThread
     Q_OBJECT
 
 public:
-    DataManagementThread(QMutex *mutex,
+    DataManagementThread(QMutex& ecgMutex,
+                         QMutex& pressMutex,
                          QVector<QPointF>& ecgDataPoints,
-                         QVector<QPointF>& tempDataPoints,
-                         QVector<QPointF>& thresholdPoints,
                          QVector<QPointF>& pressDataPoints);
 
 protected:
@@ -24,13 +23,12 @@ protected:
 private:
     const int MAX_VECTOR_SIZE = 15000;
 
-    QMutex *mutex_;
-    QVector<QPointF>& ecgDataPoints_;
-    QVector<QPointF>& tempDataPoints_;
-    QVector<QPointF>& thresholdPoints_;
-    QVector<QPointF>& pressDataPoints_;
+    QMutex& ecgMutex;
+    QMutex& pressMutex;
+    QVector<QPointF>& ecgDataPoints;
+    QVector<QPointF>& pressDataPoints;
 
-    void removeOldData(QVector<QPointF>& data);
+    void removeOldData(QVector<QPointF>& data, QString type);
 };
 
 #endif // DATAMANAGEMENTTHREAD_H

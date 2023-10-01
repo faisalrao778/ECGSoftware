@@ -1,34 +1,33 @@
 #include "DataManagementThread.h"
 #include <QDebug>
 
-DataManagementThread::DataManagementThread(QMutex *mutex, QVector<QPointF>& ecgDataPoints, QVector<QPointF>& tempDataPoints,
-                                           QVector<QPointF>& thresholdPoints, QVector<QPointF>& pressDataPoints)
-    : mutex_(mutex),
-      ecgDataPoints_(ecgDataPoints),
-      tempDataPoints_(tempDataPoints),
-      thresholdPoints_(thresholdPoints),
-      pressDataPoints_(pressDataPoints)
+DataManagementThread::DataManagementThread(QMutex& ecgMutex,
+                                           QMutex& pressMutex,
+                                           QVector<QPointF>& ecgDataPoints,
+                                           QVector<QPointF>& pressDataPoints)
+    : ecgMutex(ecgMutex),
+      pressMutex(pressMutex),
+      ecgDataPoints(ecgDataPoints),
+      pressDataPoints(pressDataPoints)
 {}
 
-void DataManagementThread::run() {
+void DataManagementThread::run()
+{
     while (!isInterruptionRequested())
     {
-        // Remove older data from the vectors
-        removeOldData(ecgDataPoints_);
-        removeOldData(tempDataPoints_);
-        removeOldData(thresholdPoints_);
-        removeOldData(pressDataPoints_);
-
-        sleep(5); // Adjust the sleep duration as needed
+        removeOldData(ecgDataPoints, "ECG");
+        removeOldData(pressDataPoints, "PRESS");
+        sleep(5);
     }
 }
 
-void DataManagementThread::removeOldData(QVector<QPointF>& data)
+void DataManagementThread::removeOldData(QVector<QPointF>& data, QString type)
 {
-    mutex_->lock();
+    if(type.compare("ECG")==0)          ecgMutex.lock();
+    else if(type.compare("PRESS")==0)   pressMutex.lock();
 
-    if (data.size() > MAX_VECTOR_SIZE)
-        data.remove(0, data.size() - MAX_VECTOR_SIZE);
+    if (data.size() > MAX_VECTOR_SIZE)  data.remove(0, data.size() - MAX_VECTOR_SIZE);
 
-    mutex_->unlock();
+    if(type.compare("ECG")==0)          ecgMutex.unlock();
+    else if(type.compare("PRESS")==0)   pressMutex.unlock();
 }

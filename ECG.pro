@@ -11,11 +11,13 @@ CONFIG += c++17
 SOURCES += \
     DataManagementThread.cpp \
     MainWindow.cpp \
+    UpdateECGGraphThread.cpp \
     main.cpp
 
 HEADERS += \
     DataManagementThread.h \
-    MainWindow.h
+    MainWindow.h \
+    UpdateECGGraphThread.h
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
