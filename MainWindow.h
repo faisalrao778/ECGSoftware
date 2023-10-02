@@ -25,38 +25,27 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
-public slots:
-    void handleError(QSerialPort::SerialPortError error);
-    void addChartPoint(QPointF);
-
 signals:
-    void dataProcessed(QList<QPointF>, QString);
-    void emitWriteData(QByteArray data);
-    void emitRemoveVectorData(QVector<QPointF> *);
+    void emitWriteSerailData(QByteArray data);
 
 private:
     Ui::MainWindow *ui;
 
-    QTimer* chartUpdateTimer;
-    int ecgUpdateListIndex;
-
-    bool updateECGData = false;
-    bool spacerAdded = false;
+    QTimer *ecgChartUpdateTimer, *pressChartUpdateTimer;
+    int ecgChartUpdateIndex, pressChartUpdateIndex;
+    bool updateECGChart = false, updatePRESSChart = false;
 
     QList<QPointF> ecgDataPoints, tempDataPoints, thresholdPoints, pressDataPoints;
     QList<QPointF> oldEcgDataPoints, oldTempDataPoints, oldThresholdPoints, oldPressDataPoints;
 
-    QLineSeries *ecgSeries, *tmpSeries, *thresholdSeries;
+    QLineSeries *ecgSeries, *pressSeries, *thresholdSeries;
     QScatterSeries *thresholdMarkerSeries;
-    QChart *ecgChart, *tmpChart;
-    QChartView *chartView, *tmpChartView;
+    QChart *ecgChart, *pressChart;
+    QChartView *chartView, *pressChartView;
     bool isThresholdPassed;
 
     qint64 startTimestamp, lastReceivedTimestamp;
     quint8 threshold;
-
-    DataManagementThread *dataManagementThread;
-    UpdateECGGraphThread *updateECGGraphThread;
 
     QSerialPort serialPort;
 
@@ -65,12 +54,13 @@ private:
     void closeEvent(QCloseEvent *event);
 
 private slots:
-    void simulation();
-    void startReading();
-    void updateData();
-    void on_pushButton_data_save_clicked();
+    void simulateSerialData();
+    void handleSerialPortError(QSerialPort::SerialPortError error);
+    void readSerialData();
+    void writeSerialData(QByteArray data);
+    void updateEcgChart();
+    void updatePressChart();
     void on_pushButton_threshold_save_clicked();
-    void writeData(QByteArray data);
 };
 
 #endif // MAINWINDOW_H
