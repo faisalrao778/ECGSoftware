@@ -25,8 +25,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     connect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
     connect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
 
-    dataManagementThread = new DataManagementThread(startTimestamp, ecgDataPoints, tempDataPoints, thresholdPoints, pressDataPoints);
-    dataManagementThread->start();
+    //dataManagementThread = new DataManagementThread(startTimestamp, ecgDataPoints, tempDataPoints, thresholdPoints, pressDataPoints);
+    //dataManagementThread->start();
 }
 
 void MainWindow::setupGraph()
@@ -225,6 +225,7 @@ void MainWindow::updateData(QStringList list,QString type)
         {
             qint64 timestamp = list.at(i).split("|").at(0).toLongLong();
             double ecgValue = list.at(i).split("|").at(1).toDouble();
+            qDebug()<<"ecgValue: "<<ecgValue;
 
             if(ecgValue > static_cast<double>(threshold) && !isThresholdPassed)
             {
@@ -257,6 +258,7 @@ void MainWindow::updateData(QStringList list,QString type)
         {
             qint64 timestamp = list.at(i).split("|").at(0).toLongLong();
             double tmpValue = list.at(i).split("|").at(1).toDouble();
+            qDebug()<<"tmpValue: "<<tmpValue;
             tempDataPoints.append(QPointF(timestamp, tmpValue));
         }
 
@@ -267,8 +269,9 @@ void MainWindow::updateData(QStringList list,QString type)
         for (int i = 0 ; i < list.size() ; i++)
         {
             qint64 timestamp = list.at(i).split("|").at(0).toLongLong();
-            double tmpValue = list.at(i).split("|").at(1).toDouble();
-            pressDataPoints.append(QPointF(timestamp, tmpValue));
+            double pressValue = list.at(i).split("|").at(1).toDouble();
+            qDebug()<<"pressValue: "<<pressValue;
+            pressDataPoints.append(QPointF(timestamp, pressValue));
         }
 
         tmpSeries->replace(pressDataPoints);
