@@ -11,50 +11,74 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     QRect availableGeometry = QApplication::desktop()->availableGeometry(this);
     this->move(availableGeometry.topLeft());
 
-    startTimestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
-    lastReceivedTimestamp = 0;
-    threshold = 200;
+    threshold = 150;
     isThresholdPassed = false;
 
+    threshold2 = 150;
+
     ui->lineEdit_threshold->setText(QString::number(threshold));
+    ui->lineEdit_threshold2->setText(QString::number(threshold2));
+
+    QString datetime = QDateTime::currentDateTime().toString("yyyyMMddHHmmss");
+
+    ecgLog = new QFile("ecgdata_" + datetime + ".txt");
+    ecgLog->open(QIODevice::WriteOnly | QIODevice::Text);
+    ecgStream = new QTextStream(ecgLog);
+
+    tempLog = new QFile("tempdata_" + datetime + ".txt");
+    tempLog->open(QIODevice::WriteOnly | QIODevice::Text);
+    tempStream = new QTextStream(tempLog);
+
+    pressLog = new QFile("pressdata_" + datetime + ".txt");
+    pressLog->open(QIODevice::WriteOnly | QIODevice::Text);
+    pressStream = new QTextStream(pressLog);
 
     setupGraph();
-    setupSerialPort();
-    //QtConcurrent::run(this, &MainWindow::simulation);
+    //    setupSerialPort();
+    QtConcurrent::run(this, &MainWindow::simulation);
 
-    connect(this, &MainWindow::dataProcessed, this, &MainWindow::updateData);
     connect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
     connect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
-    connect(this, &MainWindow::emitRemoveVectorData, this, &MainWindow::RemoveData);
 
-    dataManagementThread = new DataManagementThread(&mutex, ecgDataPoints, tempDataPoints, thresholdPoints, pressDataPoints);
-    dataManagementThread->start();
+    chartUpdateTimer = new QTimer(this);
+    connect(chartUpdateTimer, &QTimer::timeout, this, &MainWindow::updateCharts);
+    chartUpdateTimer->start(10);
 }
 
 void MainWindow::simulation()
 {
-    QStringList ecgDataPoints;
-
     int minValue = 10000;
     int maxValue = 35000;
 
     while(true)
     {
         int value = qrand() % (maxValue - minValue + 1) + minValue;
+
         qint64 timestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
-
         double dataValue = (static_cast<double>(value) / 65535.00) * 256.00;
-        QString val = QString::number(timestamp - startTimestamp) + "|" + QString::number(dataValue);
 
-        ecgDataPoints.append(val);
+        ecgDataPoints.append(QPointF(timestamp,dataValue));
+        pressDataPoints.append(QPointF(timestamp,dataValue));
 
-        if (timestamp - lastReceivedTimestamp >= 50)
+        if(dataValue > static_cast<double>(threshold) && !isThresholdPassed)
         {
-            lastReceivedTimestamp = timestamp;
-
-            emit dataProcessed(ecgDataPoints,"ECG");
-            ecgDataPoints.clear();
+            thresholdPoints.append(QPointF(timestamp, 16));
+            isThresholdPassed = true;
         }
+        else if(dataValue < static_cast<double>(threshold) && isThresholdPassed)
+        {
+            isThresholdPassed = false;
+        }
+
+        if(ecgDataPoints.size() > MAX_VECTOR_SIZE)
+            ecgDataPoints.removeFirst();
+
+        if(thresholdPoints.size() > MAX_VECTOR_SIZE)
+            thresholdPoints.removeFirst();
+
+        if(pressDataPoints.size() > MAX_VECTOR_SIZE)
+            pressDataPoints.removeFirst();
+
         Sleep(1);
     }
 }
@@ -75,9 +99,10 @@ void MainWindow::setupGraph()
     palette.setColor(QPalette::Window, Qt::white);
 
     ecgSeries = new QLineSeries();
-    tmpSeries = new QLineSeries();
+    pressSeries = new QLineSeries();
     thresholdSeries = new QLineSeries();
-    thresholdMarkers = new QScatterSeries();
+    threshold2Series = new QLineSeries();
+    thresholdMarkerSeries = new QScatterSeries();
 
     QValueAxis *xAxisEcg = new QValueAxis;
     xAxisEcg->setTickCount(10);
@@ -87,18 +112,18 @@ void MainWindow::setupGraph()
     QValueAxis *yAxisEcg = new QValueAxis;
     yAxisEcg->setLabelsVisible(false);
 
-    QValueAxis *xAxisTmp = new QValueAxis;
-    xAxisTmp->setTickCount(10);
-    xAxisTmp->setReverse(true);
-    xAxisTmp->setLabelsVisible(false);
+    QValueAxis *xAxisPress = new QValueAxis;
+    xAxisPress->setTickCount(10);
+    xAxisPress->setReverse(true);
+    xAxisPress->setLabelsVisible(false);
 
-    QValueAxis *yAxisTmp = new QValueAxis;
-    yAxisTmp->setLabelsVisible(false);
+    QValueAxis *yAxisPress = new QValueAxis;
+    yAxisPress->setLabelsVisible(false);
 
     ecgChart = new QChart();
     ecgChart->addSeries(ecgSeries);
     ecgChart->addSeries(thresholdSeries);
-    ecgChart->addSeries(thresholdMarkers);
+    ecgChart->addSeries(thresholdMarkerSeries);
     ecgChart->legend()->setVisible(false);
     ecgChart->addAxis(xAxisEcg, Qt::AlignBottom);
     ecgChart->addAxis(yAxisEcg, Qt::AlignLeft);
@@ -116,11 +141,11 @@ void MainWindow::setupGraph()
     thresholdSeries->attachAxis(yAxisEcg);
     thresholdSeries->setPen(pen_threshold);
 
-    thresholdMarkers->attachAxis(xAxisEcg);
-    thresholdMarkers->attachAxis(yAxisEcg);
-    thresholdMarkers->setMarkerSize(10);
-    thresholdMarkers->setColor(Qt::red);
-    thresholdMarkers->setMarkerShape(QScatterSeries::MarkerShapeRectangle);
+    thresholdMarkerSeries->attachAxis(xAxisEcg);
+    thresholdMarkerSeries->attachAxis(yAxisEcg);
+    thresholdMarkerSeries->setMarkerSize(10);
+    thresholdMarkerSeries->setColor(Qt::red);
+    thresholdMarkerSeries->setMarkerShape(QScatterSeries::MarkerShapeRectangle);
 
     chartView = new QChartView(ecgChart);
     chartView->setRenderHint(QPainter::Antialiasing);
@@ -130,35 +155,43 @@ void MainWindow::setupGraph()
 
     //SETUP TEMPRATURE CHART
 
-    tmpChart = new QChart();
-    tmpChart->addSeries(tmpSeries);
-    tmpChart->legend()->setVisible(false);
-    tmpChart->addAxis(xAxisTmp, Qt::AlignBottom);
-    tmpChart->addAxis(yAxisTmp, Qt::AlignLeft);
-    tmpChart->setPlotArea(QRect(0, 0, CHART_WIDTH, CHART_HEIGHT));
+    pressChart = new QChart();
+    pressChart->addSeries(pressSeries);
+    pressChart->addSeries(threshold2Series);
+    pressChart->legend()->setVisible(false);
+    pressChart->addAxis(xAxisPress, Qt::AlignBottom);
+    pressChart->addAxis(yAxisPress, Qt::AlignLeft);
+    pressChart->setPlotArea(QRect(0, 0, CHART_WIDTH, CHART_HEIGHT));
 
-    tmpSeries->attachAxis(xAxisTmp);
-    tmpSeries->attachAxis(yAxisTmp);
-    tmpSeries->setUseOpenGL(true);
-    tmpSeries->setPointsVisible(true);
-    tmpSeries->setPointLabelsVisible(true);
-    tmpSeries->setPointLabelsFormat("(@xPoint, @yPoint)");
-    tmpSeries->setPen(pen);
+    pressSeries->attachAxis(xAxisPress);
+    pressSeries->attachAxis(yAxisPress);
+    pressSeries->setUseOpenGL(true);
+    pressSeries->setPointsVisible(true);
+    pressSeries->setPointLabelsVisible(true);
+    pressSeries->setPointLabelsFormat("(@xPoint, @yPoint)");
+    pressSeries->setPen(pen);
 
-    tmpChartView = new QChartView(tmpChart);
-    tmpChartView->setRenderHint(QPainter::Antialiasing);
-    tmpChartView->setPalette(palette);
-    tmpChartView->setFrameShape(QFrame::Box);
-    tmpChartView->setFixedSize(QSize(CHART_WIDTH, CHART_HEIGHT));
+    threshold2Series->attachAxis(xAxisPress);
+    threshold2Series->attachAxis(yAxisPress);
+    threshold2Series->setPen(pen_threshold);
+
+    pressChartView = new QChartView(pressChart);
+    pressChartView->setRenderHint(QPainter::Antialiasing);
+    pressChartView->setPalette(palette);
+    pressChartView->setFrameShape(QFrame::Box);
+    pressChartView->setFixedSize(QSize(CHART_WIDTH, CHART_HEIGHT));
 
     ui->gridLayout_chart1->addWidget(chartView);
-    ui->gridLayout_chart2->addWidget(tmpChartView);
+    ui->gridLayout_chart2->addWidget(pressChartView);
 
     ecgChart->axisY()->setRange(0, 256);
-    tmpChart->axisY()->setRange(0, 256);
+    pressChart->axisY()->setRange(0, 256);
 
     thresholdSeries->append(0,threshold);
     thresholdSeries->append(1000,threshold);
+
+    threshold2Series->append(0,threshold2);
+    threshold2Series->append(1000,threshold2);
 }
 
 void MainWindow::setupSerialPort()
@@ -186,7 +219,6 @@ void MainWindow::setupSerialPort()
 
 void MainWindow::startReading()
 {
-    QStringList ecgDataPoints,pressDataPoints,tempDataPoints;
     QByteArray readBuffer;
 
     while (true)
@@ -203,28 +235,51 @@ void MainWindow::startReading()
                 uchar msb = static_cast<uchar>(readBuffer.at(2));
 
                 int value = (msb << 8) | lsb;
-                qint64 timestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
 
+                qint64 timestamp = QDateTime::currentDateTime().toMSecsSinceEpoch();
                 double dataValue = (static_cast<double>(value) / 65535.00) * 256.00;
-                QString val = QString::number(timestamp - startTimestamp) + "|" + QString::number(dataValue);
 
                 if(readBuffer.at(0) == '\xAA')
-                    ecgDataPoints.append(val);
-                else if(readBuffer.at(0) == '\xBB')
-                    pressDataPoints.append(val);
-                else if(readBuffer.at(0) == '\xDD')
-                    tempDataPoints.append(val);
-
-                if (timestamp - lastReceivedTimestamp >= 100)
                 {
-                    lastReceivedTimestamp = timestamp;
+                    ecgMutex.lock();
 
-                    emit dataProcessed(ecgDataPoints,"ECG");
-                    emit dataProcessed(tempDataPoints,"TEMP");
-                    emit dataProcessed(pressDataPoints,"PRESS");
-                    ecgDataPoints.clear();
-                    tempDataPoints.clear();
-                    pressDataPoints.clear();
+                    ecgDataPoints.append(QPointF(timestamp,dataValue));
+                    *ecgStream << timestamp << "," << dataValue << "\n";
+
+                    if(dataValue > static_cast<double>(threshold) && !isThresholdPassed)
+                    {
+                        thresholdPoints.append(QPointF(timestamp, 16));
+                        isThresholdPassed = true;
+                    }
+                    else if(dataValue < static_cast<double>(threshold) && isThresholdPassed)
+                    {
+                        isThresholdPassed = false;
+                    }
+
+                    if(ecgDataPoints.size() > MAX_VECTOR_SIZE)
+                        ecgDataPoints.removeFirst();
+
+                    if(thresholdPoints.size() > MAX_VECTOR_SIZE)
+                        thresholdPoints.removeFirst();
+
+                    ecgMutex.unlock();
+                }
+                else if(readBuffer.at(0) == '\xBB')
+                {
+                    ui->label_temprature->setText(QString::number(dataValue));
+                    *tempStream << timestamp << "," << dataValue << "\n";
+                }
+                else if(readBuffer.at(0) == '\xDD')
+                {
+                    pressMutex.lock();
+
+                    pressDataPoints.append(QPointF(timestamp,dataValue));
+                    *pressStream << timestamp << "," << dataValue << "\n";
+
+                    if(pressDataPoints.size() > MAX_VECTOR_SIZE)
+                        pressDataPoints.removeFirst();
+
+                    pressMutex.unlock();
                 }
 
                 readBuffer.remove(0, 3);
@@ -244,84 +299,37 @@ void MainWindow::startReading()
     }
 }
 
-void MainWindow::updateData(QStringList list,QString type)
+void MainWindow::updateCharts()
 {
-    if(list.isEmpty())
-        return;
-
-    mutex.lock();
-
-    if(type.compare("ECG")==0)
+    if(ecgDataPoints.size()>0)
     {
-        for (int i = 0 ; i < list.size() ; i++)
-        {
-            qint64 timestamp = list.at(i).split("|").at(0).toLongLong();
-            double ecgValue = list.at(i).split("|").at(1).toDouble();
+        qint64 ecgLastTimestamp = ecgDataPoints.last().x();
 
-            if(ecgValue > static_cast<double>(threshold) && !isThresholdPassed)
-            {
-                thresholdPoints.append(QPointF(timestamp, 16));
-                isThresholdPassed = true;
-            }
-            else if(ecgValue < static_cast<double>(threshold) && isThresholdPassed)
-            {
-                isThresholdPassed = false;
-            }
-
-            ecgDataPoints.append(QPointF(timestamp, ecgValue));
-        }
-
+        ecgMutex.lock();
         ecgSeries->replace(ecgDataPoints);
-        thresholdMarkers->replace(thresholdPoints);
+        thresholdMarkerSeries->replace(thresholdPoints);
+        ecgMutex.unlock();
 
-        qint64 lastTimestamp = ecgDataPoints.last().x();
-
-        ecgChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
-        ecgChart->axisY()->setRange(0, 256);
+        ecgChart->axisX()->setRange(ecgLastTimestamp - 3000, ecgLastTimestamp);
 
         thresholdSeries->clear();
-        thresholdSeries->append(lastTimestamp - 3000, threshold);
-        thresholdSeries->append(lastTimestamp, threshold);
-    }
-    else if(type.compare("TEMP")==0)
-    {
-        for (int i = 0 ; i < list.size() ; i++)
-        {
-            qint64 timestamp = list.at(i).split("|").at(0).toLongLong();
-            double tmpValue = list.at(i).split("|").at(1).toDouble();
-            tempDataPoints.append(QPointF(timestamp, tmpValue));
-        }
-
-        ui->label_temprature->setText(QString::number(tempDataPoints.last().y()));
-    }
-    else if(type.compare("PRESS")==0)
-    {
-        for (int i = 0 ; i < list.size() ; i++)
-        {
-            qint64 timestamp = list.at(i).split("|").at(0).toLongLong();
-            double tmpValue = list.at(i).split("|").at(1).toDouble();
-            pressDataPoints.append(QPointF(timestamp, tmpValue));
-        }
-
-        tmpSeries->replace(pressDataPoints);
-
-        qint64 lastTimestamp = pressDataPoints.last().x();
-
-        tmpChart->axisX()->setRange(lastTimestamp - 3000, lastTimestamp);
-        tmpChart->axisY()->setRange(0, 256);
+        thresholdSeries->append(ecgLastTimestamp - 3000, threshold);
+        thresholdSeries->append(ecgLastTimestamp, threshold);
     }
 
-    mutex.unlock();
-}
-
-void MainWindow::RemoveData(QVector<QPointF> *vector)
-{
-    if (vector->size() > MAX_VECTOR_SIZE)
+    if(pressDataPoints.size()>0)
     {
-        // Calculate the number of elements to remove
-        int elementsToRemove = vector->size() - MAX_VECTOR_SIZE;
-        // Remove the oldest elements from the beginning of the vector
-        vector->remove(0, elementsToRemove);
+        qint64 pressLastTimestamp = pressDataPoints.last().x();
+
+        pressMutex.lock();
+        pressSeries->replace(pressDataPoints);
+        pressMutex.unlock();
+
+        pressChart->axisX()->setRange(pressLastTimestamp - 3000, pressLastTimestamp);
+
+        threshold2Series->clear();
+        threshold2Series->append(pressLastTimestamp - 3000, threshold2);
+        threshold2Series->append(pressLastTimestamp, threshold2);
     }
 }
 
@@ -348,6 +356,8 @@ void MainWindow::handleError(QSerialPort::SerialPortError error)
 
 void MainWindow::on_pushButton_data_save_clicked()
 {
+    return;
+
     QString fileName = QFileDialog::getSaveFileName(this, "Save Data", QDir::homePath(), "Data Files (*.dat);;All Files (*)");
 
     if (fileName.isEmpty())
@@ -383,9 +393,17 @@ void MainWindow::on_pushButton_threshold_save_clicked()
     }
 
     threshold = ui->lineEdit_threshold->text().toUInt();
-    thresholdSeries->clear();
-    thresholdSeries->append(0,threshold);
-    thresholdSeries->append(100,threshold);
+}
+
+void MainWindow::on_pushButton_threshold2_save_clicked()
+{
+    if(ui->lineEdit_threshold2->text().toUInt() < 0 || ui->lineEdit_threshold2->text().toUInt() > 255)
+    {
+        QMessageBox::critical(this, "Error", "Threshould2 should be in Range: [0-255]");
+        return;
+    }
+
+    threshold2 = ui->lineEdit_threshold2->text().toUInt();
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)
@@ -396,7 +414,9 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
     delete dataManagementThread;
 
-    disconnect(this, &MainWindow::dataProcessed, this, &MainWindow::updateData);
+    ecgLog->close();
+    pressLog->close();
+    tempLog->close();
     disconnect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
     disconnect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
 

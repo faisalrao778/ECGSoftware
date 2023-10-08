@@ -1,34 +1,45 @@
 #include "DataManagementThread.h"
 #include <QDebug>
 
-DataManagementThread::DataManagementThread(QMutex *mutex, QVector<QPointF>& ecgDataPoints, QVector<QPointF>& tempDataPoints,
-                                           QVector<QPointF>& thresholdPoints, QVector<QPointF>& pressDataPoints)
-    : mutex_(mutex),
-      ecgDataPoints_(ecgDataPoints),
-      tempDataPoints_(tempDataPoints),
-      thresholdPoints_(thresholdPoints),
-      pressDataPoints_(pressDataPoints)
-{}
+DataManagementThread::DataManagementThread(QMutex *ecgMutex,
+                                           QVector<QPointF>& ecgData,
+                                           QMutex *pressMutex,
+                                           QVector<QPointF>& pressData)
+    : ecgMutex_(ecgMutex),
+      ecgData_(ecgData),
+      pressMutex_(pressMutex),
+      pressData_(pressData)
+{
 
-void DataManagementThread::run() {
+}
+
+void DataManagementThread::run()
+{
     while (!isInterruptionRequested())
     {
-        // Remove older data from the vectors
-        removeOldData(ecgDataPoints_);
-        removeOldData(tempDataPoints_);
-        removeOldData(thresholdPoints_);
-        removeOldData(pressDataPoints_);
+        removeOldECGData();
+        removeOldPressData();
 
-        sleep(5); // Adjust the sleep duration as needed
+        sleep(5);
     }
 }
 
-void DataManagementThread::removeOldData(QVector<QPointF>& data)
+void DataManagementThread::removeOldECGData()
 {
-    mutex_->lock();
+    ecgMutex_->lock();
 
-    if (data.size() > MAX_VECTOR_SIZE)
-        data.remove(0, data.size() - MAX_VECTOR_SIZE);
+    if (ecgData_.size() > MAX_VECTOR_SIZE)
+        ecgData_.remove(0, ecgData_.size() - MAX_VECTOR_SIZE);
 
-    mutex_->unlock();
+    ecgMutex_->unlock();
+}
+
+void DataManagementThread::removeOldPressData()
+{
+    pressMutex_->lock();
+
+    if (pressData_.size() > MAX_VECTOR_SIZE)
+        pressData_.remove(0, pressData_.size() - MAX_VECTOR_SIZE);
+
+    pressMutex_->unlock();
 }

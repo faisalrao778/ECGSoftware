@@ -9,6 +9,7 @@
 #include <QtWidgets>
 #include <QtCharts>
 #include <QtConcurrent>
+#include <QDateTime>
 
 #include "DataManagementThread.h"
 
@@ -19,9 +20,9 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    // Define a maximum size for your data vectors
-    const int MAX_VECTOR_SIZE = 25000; // Adjust this according to your needs
-    QMutex mutex;
+    const int MAX_VECTOR_SIZE = 20000;
+
+    QMutex ecgMutex, pressMutex;
 
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
@@ -30,23 +31,25 @@ public slots:
     void handleError(QSerialPort::SerialPortError error);
 
 signals:
-    void dataProcessed(QStringList,QString);
     void emitWriteData(QByteArray data);
-    void emitRemoveVectorData(QVector<QPointF> *);
 
 private:
     Ui::MainWindow *ui;
 
-    QVector<QPointF> ecgDataPoints, tempDataPoints, thresholdPoints, pressDataPoints;
+    QVector<QPointF> ecgDataPoints, thresholdPoints, pressDataPoints;
 
-    QLineSeries *ecgSeries, *tmpSeries, *thresholdSeries;
-    QScatterSeries *thresholdMarkers;
-    QChart *ecgChart, *tmpChart;
-    QChartView *chartView, *tmpChartView;
+    QFile *ecgLog, *tempLog, *pressLog;
+    QTextStream *ecgStream, *tempStream, *pressStream;
+
+    QLineSeries *ecgSeries, *pressSeries, *thresholdSeries, *threshold2Series;
+    QScatterSeries *thresholdMarkerSeries;
+    QChart *ecgChart, *pressChart;
+    QChartView *chartView, *pressChartView;
+
     bool isThresholdPassed;
+    quint8 threshold, threshold2;
 
-    qint64 startTimestamp, lastReceivedTimestamp;
-    quint8 threshold;
+    QTimer *chartUpdateTimer;
 
     DataManagementThread *dataManagementThread;
 
@@ -59,11 +62,11 @@ private:
 private slots:
     void simulation();
     void startReading();
-    void updateData(QStringList, QString);
+    void updateCharts();
+    void writeData(QByteArray data);
     void on_pushButton_data_save_clicked();
     void on_pushButton_threshold_save_clicked();
-    void writeData(QByteArray data);
-    void RemoveData(QVector<QPointF> *vector);
+    void on_pushButton_threshold2_save_clicked();
 };
 
 #endif // MAINWINDOW_H
