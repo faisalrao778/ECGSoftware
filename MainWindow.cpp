@@ -34,8 +34,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     pressStream = new QTextStream(pressLog);
 
     setupGraph();
-    //    setupSerialPort();
-    QtConcurrent::run(this, &MainWindow::simulation);
+    setupSerialPort();
+//    QtConcurrent::run(this, &MainWindow::simulation);
 
     connect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
     connect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
