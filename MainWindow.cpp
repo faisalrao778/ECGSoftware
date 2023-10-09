@@ -266,12 +266,7 @@ void MainWindow::startReading()
                 }
                 else if(readBuffer.at(0) == '\xBB')
                 {
-                    ui->label_temprature->setText(QString::number(dataValue));
-                    *tempStream << timestamp << "," << dataValue << "\n";
-                }
-                else if(readBuffer.at(0) == '\xDD')
-                {
-                    pressMutex.lock();
+					pressMutex.lock();
 
                     pressDataPoints.append(QPointF(timestamp,dataValue));
                     *pressStream << timestamp << "," << dataValue << "\n";
@@ -280,6 +275,11 @@ void MainWindow::startReading()
                         pressDataPoints.removeFirst();
 
                     pressMutex.unlock();
+                }
+                else if(readBuffer.at(0) == '\xDD')
+                {
+                    ui->label_temprature->setText(QString::number(dataValue));
+                    *tempStream << timestamp << "," << dataValue << "\n";
                 }
 
                 readBuffer.remove(0, 3);
