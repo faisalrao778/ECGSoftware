@@ -36,17 +36,17 @@ signals:
 private:
     Ui::MainWindow *ui;
 
-    QVector<QPointF> ecgDataPoints, thresholdPoints, pressDataPoints;
+    QVector<QPointF> ecgDataPoints, thresholdPoints, pressDataPoints, threshold2Points;
 
     QFile *ecgLog, *tempLog, *pressLog;
     QTextStream *ecgStream, *tempStream, *pressStream;
 
     QLineSeries *ecgSeries, *pressSeries, *thresholdSeries, *threshold2Series;
-    QScatterSeries *thresholdMarkerSeries;
+    QScatterSeries *thresholdMarkerSeries, *threshold2MarkerSeries;
     QChart *ecgChart, *pressChart;
     QChartView *chartView, *pressChartView;
 
-    bool isThresholdPassed;
+    bool isThresholdPassed, isThreshold2Passed;
     quint8 threshold, threshold2;
 
     QTimer *chartUpdateTimer;

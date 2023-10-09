@@ -15,6 +15,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     isThresholdPassed = false;
 
     threshold2 = 150;
+    isThreshold2Passed = false;
 
     ui->lineEdit_threshold->setText(QString::number(threshold));
     ui->lineEdit_threshold2->setText(QString::number(threshold2));
@@ -103,6 +104,7 @@ void MainWindow::setupGraph()
     thresholdSeries = new QLineSeries();
     threshold2Series = new QLineSeries();
     thresholdMarkerSeries = new QScatterSeries();
+    threshold2MarkerSeries = new QScatterSeries();
 
     QValueAxis *xAxisEcg = new QValueAxis;
     xAxisEcg->setTickCount(10);
@@ -158,6 +160,7 @@ void MainWindow::setupGraph()
     pressChart = new QChart();
     pressChart->addSeries(pressSeries);
     pressChart->addSeries(threshold2Series);
+    pressChart->addSeries(threshold2MarkerSeries);
     pressChart->legend()->setVisible(false);
     pressChart->addAxis(xAxisPress, Qt::AlignBottom);
     pressChart->addAxis(yAxisPress, Qt::AlignLeft);
@@ -174,6 +177,12 @@ void MainWindow::setupGraph()
     threshold2Series->attachAxis(xAxisPress);
     threshold2Series->attachAxis(yAxisPress);
     threshold2Series->setPen(pen_threshold);
+
+    threshold2MarkerSeries->attachAxis(xAxisPress);
+    threshold2MarkerSeries->attachAxis(yAxisPress);
+    threshold2MarkerSeries->setMarkerSize(10);
+    threshold2MarkerSeries->setColor(Qt::red);
+    threshold2MarkerSeries->setMarkerShape(QScatterSeries::MarkerShapeRectangle);
 
     pressChartView = new QChartView(pressChart);
     pressChartView->setRenderHint(QPainter::Antialiasing);
@@ -271,8 +280,21 @@ void MainWindow::startReading()
                     pressDataPoints.append(QPointF(timestamp,dataValue));
                     *pressStream << timestamp << "," << dataValue << "\n";
 
+                    if(dataValue > static_cast<double>(threshold2) && !isThreshold2Passed)
+                    {
+                        threshold2Points.append(QPointF(timestamp, 16));
+                        isThreshold2Passed = true;
+                    }
+                    else if(dataValue < static_cast<double>(threshold2) && isThreshold2Passed)
+                    {
+                        isThreshold2Passed = false;
+                    }
+
                     if(pressDataPoints.size() > MAX_VECTOR_SIZE)
                         pressDataPoints.removeFirst();
+
+                    if(threshold2Points.size() > MAX_VECTOR_SIZE)
+                        threshold2Points.removeFirst();
 
                     pressMutex.unlock();
                 }
@@ -323,6 +345,7 @@ void MainWindow::updateCharts()
 
         pressMutex.lock();
         pressSeries->replace(pressDataPoints);
+        threshold2MarkerSeries->replace(threshold2Points);
         pressMutex.unlock();
 
         pressChart->axisX()->setRange(pressLastTimestamp - 3000, pressLastTimestamp);
