@@ -223,6 +223,10 @@ void MainWindow::setupSerialPort()
     data.append(static_cast<char>(threshold));
     emit emitWriteData(data);
 
+    QByteArray data2;
+    data.append(static_cast<char>(threshold2));
+    emit emitWriteData(data2);
+
     QtConcurrent::run(this, &MainWindow::startReading);
 }
 
@@ -256,12 +260,12 @@ void MainWindow::startReading()
                     *ecgStream << timestamp << "," << dataValue << "\n";
 
                     if(dataValue > static_cast<double>(threshold) && !isThresholdPassed)
-                    {       
+                    {
+                        thresholdPoints.append(QPointF(timestamp, 16));
                         isThresholdPassed = true;
                     }
                     else if(dataValue < static_cast<double>(threshold) && isThresholdPassed)
                     {
-                        thresholdPoints.append(QPointF(timestamp, 16));
                         isThresholdPassed = false;
                     }
 
@@ -282,11 +286,11 @@ void MainWindow::startReading()
 
                     if(dataValue > static_cast<double>(threshold2) && !isThreshold2Passed)
                     {
+                        threshold2Points.append(QPointF(timestamp, 16));
                         isThreshold2Passed = true;
                     }
                     else if(dataValue < static_cast<double>(threshold2) && isThreshold2Passed)
                     {
-                        threshold2Points.append(QPointF(timestamp, 16));
                         isThreshold2Passed = false;
                     }
 
