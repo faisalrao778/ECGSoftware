@@ -3,6 +3,8 @@
 
 #define CHART_WIDTH 1400
 #define CHART_HEIGHT 400
+#define START_THRESHOLD 150
+#define GRAPH_TIME_RANGE 3000
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
@@ -11,10 +13,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     QRect availableGeometry = QApplication::desktop()->availableGeometry(this);
     this->move(availableGeometry.topLeft());
 
-    threshold = 150;
+    threshold = START_THRESHOLD;
     isThresholdPassed = false;
 
-    threshold2 = 150;
+    threshold2 = START_THRESHOLD;
     isThreshold2Passed = false;
 
     ui->lineEdit_threshold->setText(QString::number(threshold));
@@ -35,8 +37,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     pressStream = new QTextStream(pressLog);
 
     setupGraph();
-    setupSerialPort();
-//    QtConcurrent::run(this, &MainWindow::simulation);
+    //    setupSerialPort();
+    QtConcurrent::run(this, &MainWindow::simulation);
 
     connect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
     connect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
@@ -59,7 +61,8 @@ void MainWindow::simulation()
         double dataValue = (static_cast<double>(value) / 65535.00) * 256.00;
 
         ecgDataPoints.append(QPointF(timestamp,dataValue));
-        pressDataPoints.append(QPointF(timestamp,dataValue));
+
+        *ecgStream << timestamp << "," << dataValue << "\n";
 
         if(dataValue > static_cast<double>(threshold) && !isThresholdPassed)
         {
@@ -76,9 +79,6 @@ void MainWindow::simulation()
 
         if(thresholdPoints.size() > MAX_VECTOR_SIZE)
             thresholdPoints.removeFirst();
-
-        if(pressDataPoints.size() > MAX_VECTOR_SIZE)
-            pressDataPoints.removeFirst();
 
         Sleep(1);
     }
@@ -279,7 +279,7 @@ void MainWindow::startReading()
                 }
                 else if(readBuffer.at(0) == '\xBB')
                 {
-					pressMutex.lock();
+                    pressMutex.lock();
 
                     pressDataPoints.append(QPointF(timestamp,dataValue));
                     *pressStream << timestamp << "," << dataValue << "\n";
@@ -305,7 +305,7 @@ void MainWindow::startReading()
                 else if(readBuffer.at(0) == '\xDD')
                 {
                     double temp = (0.1687*dataValue)+23074;
-                    ui->label_temprature->setText(QString::number(temp));
+                    ui->label_temprature->setText(QString::number(temp,'f',2));
                     *tempStream << timestamp << "," << temp << "\n";
                 }
 
@@ -338,6 +338,7 @@ void MainWindow::updateCharts()
     if(ecgDataPoints.size()>0)
     {
         qint64 ecgLastTimestamp = ecgDataPoints.last().x();
+        qreal bpm = 0.0;
 
         ecgMutex.lock();
         ecgSeries->replace(ecgDataPoints);
@@ -349,6 +350,20 @@ void MainWindow::updateCharts()
         thresholdSeries->clear();
         thresholdSeries->append(ecgLastTimestamp - 3000, threshold);
         thresholdSeries->append(ecgLastTimestamp, threshold);
+
+        int numPoints = std::min(static_cast<int>(thresholdPoints.size()), 4);
+
+        if(numPoints>0)
+        {
+            for(int i = thresholdPoints.size() - 1; i >= thresholdPoints.size() - numPoints + 1; --i)
+            {
+                bpm += (thresholdPoints[i].x() - thresholdPoints[i - 1].x());
+            }
+
+            qreal bpm_minutes = bpm / numPoints / 60000;
+
+            ui->label->setText(QString::number(bpm_minutes, 'f', 2));
+        }
     }
 
     if(pressDataPoints.size()>0)
@@ -443,15 +458,10 @@ void MainWindow::on_pushButton_threshold2_save_clicked()
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    qDebug() << "Closing...";
-    dataManagementThread->requestInterruption();
-    dataManagementThread->wait(); // Wait for the thread to finish
-
-    delete dataManagementThread;
-
     ecgLog->close();
     pressLog->close();
     tempLog->close();
+
     disconnect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
     disconnect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
 
@@ -464,5 +474,15 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 MainWindow::~MainWindow()
 {
+    ecgLog->close();
+    pressLog->close();
+    tempLog->close();
 
+    disconnect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
+    disconnect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
+
+    serialPort.close();
+
+    delete ui;
+    QCoreApplication::quit();
 }

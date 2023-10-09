@@ -11,8 +11,6 @@
 #include <QtConcurrent>
 #include <QDateTime>
 
-#include "DataManagementThread.h"
-
 namespace Ui {    class MainWindow;     }
 
 class MainWindow : public QMainWindow
@@ -50,8 +48,6 @@ private:
     quint8 threshold, threshold2;
 
     QTimer *chartUpdateTimer;
-
-    DataManagementThread *dataManagementThread;
 
     QSerialPort serialPort;
 
