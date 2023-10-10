@@ -304,7 +304,7 @@ void MainWindow::startReading()
                 }
                 else if(readBuffer.at(0) == '\xDD')
                 {
-                    double temp = (0.1687*dataValue)+23074;
+                    double temp = (0.1687*dataValue)+25;
                     ui->label_temprature->setText(QString::number(temp,'f',2));
                     *tempStream << timestamp << "," << temp << "\n";
                 }
