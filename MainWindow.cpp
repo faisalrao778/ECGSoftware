@@ -37,8 +37,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     pressStream = new QTextStream(pressLog);
 
     setupGraph();
-    //    setupSerialPort();
-    QtConcurrent::run(this, &MainWindow::simulation);
+    setupSerialPort();
+    //QtConcurrent::run(this, &MainWindow::simulation);
 
     connect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
     connect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
@@ -272,8 +272,8 @@ void MainWindow::startReading()
                     if(ecgDataPoints.size() > MAX_VECTOR_SIZE)
                         ecgDataPoints.removeFirst();
 
-                    if(thresholdPoints.size() > MAX_VECTOR_SIZE)
-                        thresholdPoints.removeFirst();
+                    //if(thresholdPoints.size() > MAX_VECTOR_SIZE)
+                    //    thresholdPoints.removeFirst();
 
                     ecgMutex.unlock();
                 }
@@ -338,7 +338,7 @@ void MainWindow::updateCharts()
     if(ecgDataPoints.size()>0)
     {
         qint64 ecgLastTimestamp = ecgDataPoints.last().x();
-        qreal bpm = 0.0;
+        qreal bpm_total = 0.0;
 
         ecgMutex.lock();
         ecgSeries->replace(ecgDataPoints);
@@ -351,18 +351,22 @@ void MainWindow::updateCharts()
         thresholdSeries->append(ecgLastTimestamp - 3000, threshold);
         thresholdSeries->append(ecgLastTimestamp, threshold);
 
-        int numPoints = std::min(static_cast<int>(thresholdPoints.size()), 4);
+        int numPoints = static_cast<int>(thresholdPoints.size());
 
         if(numPoints>0)
         {
             for(int i = thresholdPoints.size() - 1; i >= thresholdPoints.size() - numPoints + 1; --i)
             {
-                bpm += (thresholdPoints[i].x() - thresholdPoints[i - 1].x());
+                bpm_total += (thresholdPoints[i].x() - thresholdPoints[i - 1].x());
             }
 
-            qreal bpm_minutes = bpm / numPoints / 60000;
+            qreal bpm_average_ms = bpm_total / numPoints;
+            qreal bpm_average_sec = bpm_average_ms / 1000;
+            qreal bpm_average_min = bpm_average_sec / 60;
 
-            ui->label->setText(QString::number(bpm_minutes, 'f', 2));
+            qreal bpm = 1 / bpm_average_min;
+
+            ui->label->setText(QString::number(bpm, 'f', 2));
         }
     }
 
