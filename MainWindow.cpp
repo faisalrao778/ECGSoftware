@@ -373,7 +373,10 @@ void MainWindow::updateCharts()
 
             qreal bpm = 1 / bpm_average_min;
 
-            ui->label->setText(QString::number(bpm, 'f', 2));
+            if(bpm>0)
+                ui->label->setText(QString::number(bpm, 'f', 2));
+            else
+                ui->label->setText("0");
         }
     }
 
