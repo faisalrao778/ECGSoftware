@@ -337,10 +337,10 @@ void MainWindow::updateCharts()
 {
     if(ecgDataPoints.size()>0)
     {
-        qint64 ecgLastTimestamp = ecgDataPoints.last().x();
         qreal bpm_total = 0.0;
 
         ecgMutex.lock();
+        qint64 ecgLastTimestamp = ecgDataPoints.last().x();
         ecgSeries->replace(ecgDataPoints);
         thresholdMarkerSeries->replace(thresholdPoints);
         ecgMutex.unlock();
@@ -351,16 +351,23 @@ void MainWindow::updateCharts()
         thresholdSeries->append(ecgLastTimestamp - 3000, threshold);
         thresholdSeries->append(ecgLastTimestamp, threshold);
 
-        int numPoints = static_cast<int>(thresholdPoints.size());
+        //int size_limit = std::min(static_cast<int>(thresholdPoints.size()), 4);
+        int size_limit = static_cast<int>(thresholdPoints.size());
 
-        if(numPoints>0)
+        if(size_limit>0)
         {
-            for(int i = thresholdPoints.size() - 1; i >= thresholdPoints.size() - numPoints + 1; --i)
+            int count = 0;
+
+            for(int i = thresholdPoints.size() - 1; i >= thresholdPoints.size() - size_limit + 1; --i)
             {
+                if(thresholdPoints[i - 1].x() < ecgLastTimestamp - 4000)
+                    break;
+
                 bpm_total += (thresholdPoints[i].x() - thresholdPoints[i - 1].x());
+                count++;
             }
 
-            qreal bpm_average_ms = bpm_total / numPoints;
+            qreal bpm_average_ms = bpm_total / count;
             qreal bpm_average_sec = bpm_average_ms / 1000;
             qreal bpm_average_min = bpm_average_sec / 60;
 
@@ -372,9 +379,8 @@ void MainWindow::updateCharts()
 
     if(pressDataPoints.size()>0)
     {
-        qint64 pressLastTimestamp = pressDataPoints.last().x();
-
         pressMutex.lock();
+        qint64 pressLastTimestamp = pressDataPoints.last().x();
         pressSeries->replace(pressDataPoints);
         threshold2MarkerSeries->replace(threshold2Points);
         pressMutex.unlock();
