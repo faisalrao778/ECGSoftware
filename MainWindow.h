@@ -52,7 +52,7 @@ private:
     QSerialPort serialPort;
 
     void setupGraph();
-    void setupSerialPort();
+    void setupSerialPort(QString portNum);
     void closeEvent(QCloseEvent *event);
 
 private slots:
@@ -63,6 +63,7 @@ private slots:
     void on_pushButton_data_save_clicked();
     void on_pushButton_threshold_save_clicked();
     void on_pushButton_threshold2_save_clicked();
+    void on_pushButton_save_port_clicked();
 };
 
 #endif // MAINWINDOW_H
