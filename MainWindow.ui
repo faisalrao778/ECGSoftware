@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1234</width>
-    <height>672</height>
+    <height>670</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -70,7 +70,7 @@
                </font>
               </property>
               <property name="title">
-               <string>Threshold 1</string>
+               <string>Threshold ECG</string>
               </property>
               <layout class="QVBoxLayout" name="verticalLayout">
                <item>
@@ -89,7 +89,7 @@
                <item>
                 <widget class="QPushButton" name="pushButton_threshold_save">
                  <property name="text">
-                  <string>SAVE</string>
+                  <string>OK</string>
                  </property>
                 </widget>
                </item>
@@ -170,7 +170,7 @@
               <property name="maximumSize">
                <size>
                 <width>200</width>
-                <height>150</height>
+                <height>130</height>
                </size>
               </property>
               <property name="font">
@@ -215,7 +215,7 @@
               <property name="maximumSize">
                <size>
                 <width>200</width>
-                <height>150</height>
+                <height>130</height>
                </size>
               </property>
               <property name="font">
@@ -312,7 +312,7 @@
                </font>
               </property>
               <property name="title">
-               <string>Threshold 2</string>
+               <string>Threshold RESP</string>
               </property>
               <layout class="QVBoxLayout" name="verticalLayout_2">
                <item>
@@ -325,7 +325,7 @@
                <item>
                 <widget class="QPushButton" name="pushButton_threshold2_save">
                  <property name="text">
-                  <string>SAVE</string>
+                  <string>OK</string>
                  </property>
                 </widget>
                </item>
@@ -402,7 +402,7 @@
               <property name="maximumSize">
                <size>
                 <width>200</width>
-                <height>150</height>
+                <height>130</height>
                </size>
               </property>
               <property name="font">
@@ -449,6 +449,13 @@
               </property>
              </spacer>
             </item>
+            <item>
+             <widget class="QPushButton" name="pushButton">
+              <property name="text">
+               <string>CLOSE</string>
+              </property>
+             </widget>
+            </item>
            </layout>
           </widget>
          </item>
@@ -463,6 +470,12 @@
           <height>0</height>
          </size>
         </property>
+        <property name="maximumSize">
+         <size>
+          <width>16777215</width>
+          <height>16777215</height>
+         </size>
+        </property>
         <property name="frameShape">
          <enum>QFrame::StyledPanel</enum>
         </property>
@@ -471,7 +484,40 @@
         </property>
         <layout class="QVBoxLayout" name="verticalLayout_9">
          <item>
+          <widget class="QLabel" name="label_2">
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="text">
+            <string>115200 bps</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+           </property>
+           <property name="margin">
+            <number>0</number>
+           </property>
+           <property name="indent">
+            <number>15</number>
+           </property>
+          </widget>
+         </item>
+         <item>
           <widget class="QFrame" name="frame">
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>16777215</height>
+            </size>
+           </property>
            <property name="font">
             <font>
              <pointsize>10</pointsize>
@@ -498,6 +544,16 @@
              </spacer>
             </item>
             <item>
+             <widget class="QComboBox" name="comboBox_port_num">
+              <property name="maximumSize">
+               <size>
+                <width>100</width>
+                <height>25</height>
+               </size>
+              </property>
+             </widget>
+            </item>
+            <item>
              <widget class="QLabel" name="label">
               <property name="maximumSize">
                <size>
@@ -511,16 +567,6 @@
              </widget>
             </item>
             <item>
-             <widget class="QComboBox" name="comboBox_port_num">
-              <property name="maximumSize">
-               <size>
-                <width>100</width>
-                <height>25</height>
-               </size>
-              </property>
-             </widget>
-            </item>
-            <item>
              <widget class="QPushButton" name="pushButton_save_port">
               <property name="maximumSize">
                <size>
@@ -529,29 +575,11 @@
                </size>
               </property>
               <property name="text">
-               <string>Save</string>
+               <string>OK</string>
               </property>
              </widget>
             </item>
            </layout>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLabel" name="label_2">
-           <property name="font">
-            <font>
-             <pointsize>10</pointsize>
-            </font>
-           </property>
-           <property name="text">
-            <string>115200 bps</string>
-           </property>
-           <property name="alignment">
-            <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-           </property>
-           <property name="indent">
-            <number>15</number>
-           </property>
           </widget>
          </item>
         </layout>

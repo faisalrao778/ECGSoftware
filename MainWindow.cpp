@@ -2,7 +2,7 @@
 #include "ui_MainWindow.h"
 
 #define CHART_WIDTH 1400
-#define CHART_HEIGHT 400
+#define CHART_HEIGHT 380
 #define START_THRESHOLD 150
 #define GRAPH_TIME_RANGE 3000
 
@@ -267,7 +267,7 @@ void MainWindow::startReading()
 {
     QByteArray readBuffer;
 
-    while (true)
+    while (!stopReading)
     {
         QCoreApplication::processEvents();
 
@@ -437,17 +437,26 @@ void MainWindow::updateCharts()
         threshold2Series->append(pressLastTimestamp, threshold2);
 
         //int size_limit = std::min(static_cast<int>(thresholdPoints.size()), 4);
-        int size = static_cast<int>(threshold2Points.size());
+        int size_limit = static_cast<int>(threshold2Points.size());
 
-        if(size>1)
+        if(size_limit>0)
         {
-            rpm_total += (threshold2Points[size-1].x() - threshold2Points[size-2].x());
+            int count = 0;
 
-            qreal rpm_ms = rpm_total;
-            qreal rpm_sec = rpm_ms / 1000;
-            qreal rpm_min = rpm_sec / 60;
+            for(int i = threshold2Points.size() - 1; i >= threshold2Points.size() - size_limit + 1; --i)
+            {
+                if(threshold2Points[i - 1].x() < pressLastTimestamp - 4000)
+                    break;
 
-            qreal rpm = 1 / rpm_min;
+                rpm_total += (threshold2Points[i].x() - threshold2Points[i - 1].x());
+                count++;
+            }
+
+            qreal rpm_average_ms = rpm_total / count;
+            qreal rpm_average_sec = rpm_average_ms / 1000;
+            qreal rpm_average_min = rpm_average_sec / 60;
+
+            qreal rpm = 1 / rpm_average_min;
 
             if(rpm>0)
                 ui->label_rpm->setText(QString::number(rpm, 'f', 2));
@@ -564,4 +573,21 @@ MainWindow::~MainWindow()
 void MainWindow::on_pushButton_save_port_clicked()
 {
     setupSerialPort(ui->comboBox_port_num->currentText());
+}
+
+void MainWindow::on_pushButton_clicked()
+{
+    stopReading = true;
+
+    ecgLog->close();
+    pressLog->close();
+    tempLog->close();
+
+    disconnect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
+    disconnect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
+
+    serialPort.close();
+
+    delete ui;
+    QCoreApplication::quit();
 }

@@ -34,6 +34,8 @@ signals:
 private:
     Ui::MainWindow *ui;
 
+    bool stopReading = false;
+
     QVector<QPointF> ecgDataPoints, thresholdPoints, pressDataPoints, threshold2Points;
 
     QFile *ecgLog, *tempLog, *pressLog;
@@ -64,6 +66,7 @@ private slots:
     void on_pushButton_threshold_save_clicked();
     void on_pushButton_threshold2_save_clicked();
     void on_pushButton_save_port_clicked();
+    void on_pushButton_clicked();
 };
 
 #endif // MAINWINDOW_H
