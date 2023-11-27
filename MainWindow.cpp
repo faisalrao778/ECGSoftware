@@ -16,11 +16,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     threshold = START_THRESHOLD;
     isThresholdPassed = false;
 
-    threshold2 = START_THRESHOLD;
-    isThreshold2Passed = false;
-
     ui->lineEdit_threshold->setText(QString::number(threshold));
-    ui->lineEdit_threshold2->setText(QString::number(threshold2));
 
     ui->comboBox_port_num->addItem("0");
     ui->comboBox_port_num->addItem("1");
@@ -55,10 +51,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     tempLog = new QFile("tempdata_" + datetime + ".txt");
     tempLog->open(QIODevice::WriteOnly | QIODevice::Text);
     tempStream = new QTextStream(tempLog);
-
-    pressLog = new QFile("pressdata_" + datetime + ".txt");
-    pressLog->open(QIODevice::WriteOnly | QIODevice::Text);
-    pressStream = new QTextStream(pressLog);
 
     setupGraph();
     setupSerialPort(ui->comboBox_port_num->currentText());
@@ -125,11 +117,8 @@ void MainWindow::setupGraph()
     palette.setColor(QPalette::Window, Qt::white);
 
     ecgSeries = new QLineSeries();
-    pressSeries = new QLineSeries();
     thresholdSeries = new QLineSeries();
-    threshold2Series = new QLineSeries();
     thresholdMarkerSeries = new QScatterSeries();
-    threshold2MarkerSeries = new QScatterSeries();
 
     QValueAxis *xAxisEcg = new QValueAxis;
     xAxisEcg->setTickCount(10);
@@ -138,14 +127,6 @@ void MainWindow::setupGraph()
 
     QValueAxis *yAxisEcg = new QValueAxis;
     yAxisEcg->setLabelsVisible(false);
-
-    QValueAxis *xAxisPress = new QValueAxis;
-    xAxisPress->setTickCount(10);
-    xAxisPress->setReverse(true);
-    xAxisPress->setLabelsVisible(false);
-
-    QValueAxis *yAxisPress = new QValueAxis;
-    yAxisPress->setLabelsVisible(false);
 
     ecgChart = new QChart();
     ecgChart->addSeries(ecgSeries);
@@ -180,52 +161,12 @@ void MainWindow::setupGraph()
     chartView->setFrameShape(QFrame::Box);
     chartView->setFixedSize(QSize(CHART_WIDTH, CHART_HEIGHT));
 
-    //SETUP TEMPRATURE CHART
-
-    pressChart = new QChart();
-    pressChart->addSeries(pressSeries);
-    pressChart->addSeries(threshold2Series);
-    pressChart->addSeries(threshold2MarkerSeries);
-    pressChart->legend()->setVisible(false);
-    pressChart->addAxis(xAxisPress, Qt::AlignBottom);
-    pressChart->addAxis(yAxisPress, Qt::AlignLeft);
-    pressChart->setPlotArea(QRect(0, 0, CHART_WIDTH, CHART_HEIGHT));
-
-    pressSeries->attachAxis(xAxisPress);
-    pressSeries->attachAxis(yAxisPress);
-    pressSeries->setUseOpenGL(true);
-    pressSeries->setPointsVisible(true);
-    pressSeries->setPointLabelsVisible(true);
-    pressSeries->setPointLabelsFormat("(@xPoint, @yPoint)");
-    pressSeries->setPen(pen);
-
-    threshold2Series->attachAxis(xAxisPress);
-    threshold2Series->attachAxis(yAxisPress);
-    threshold2Series->setPen(pen_threshold);
-
-    threshold2MarkerSeries->attachAxis(xAxisPress);
-    threshold2MarkerSeries->attachAxis(yAxisPress);
-    threshold2MarkerSeries->setMarkerSize(10);
-    threshold2MarkerSeries->setColor(Qt::red);
-    threshold2MarkerSeries->setMarkerShape(QScatterSeries::MarkerShapeRectangle);
-
-    pressChartView = new QChartView(pressChart);
-    pressChartView->setRenderHint(QPainter::Antialiasing);
-    pressChartView->setPalette(palette);
-    pressChartView->setFrameShape(QFrame::Box);
-    pressChartView->setFixedSize(QSize(CHART_WIDTH, CHART_HEIGHT));
-
     ui->gridLayout_chart1->addWidget(chartView);
-    ui->gridLayout_chart2->addWidget(pressChartView);
 
     ecgChart->axisY()->setRange(0, 256);
-    pressChart->axisY()->setRange(0, 256);
 
     thresholdSeries->append(0,threshold);
     thresholdSeries->append(1000,threshold);
-
-    threshold2Series->append(0,threshold2);
-    threshold2Series->append(1000,threshold2);
 }
 
 void MainWindow::setupSerialPort(QString portNum)
@@ -257,10 +198,6 @@ void MainWindow::setupSerialPort(QString portNum)
     QByteArray data;
     data.append(static_cast<char>(threshold));
     emit emitWriteData(data);
-
-    QByteArray data2;
-    data.append(static_cast<char>(threshold2));
-    emit emitWriteData(data2);
 }
 
 void MainWindow::startReading()
@@ -317,51 +254,18 @@ void MainWindow::startReading()
 
                     ecgMutex.unlock();
                 }
-                else if(readBuffer.at(0) == '\xBB')
-                {
-                    pressMutex.lock();
-
-                    pressDataPoints.append(QPointF(timestamp,dataValue));
-                    *pressStream << timestamp << "," << dataValue << "\n";
-
-                    if(dataValue > static_cast<double>(threshold2) && !isThreshold2Passed)
-                    {
-                        threshold2Points.append(QPointF(timestamp, 16));
-                        isThreshold2Passed = true;
-                    }
-                    else if(dataValue < static_cast<double>(threshold2) && isThreshold2Passed)
-                    {
-                        isThreshold2Passed = false;
-                    }
-
-                    if(pressDataPoints.size() > MAX_VECTOR_SIZE)
-                        pressDataPoints.removeFirst();
-
-                    if(threshold2Points.size() > MAX_VECTOR_SIZE)
-                        threshold2Points.removeFirst();
-
-                    pressMutex.unlock();
-                }
                 else if(readBuffer.at(0) == '\xDD')
                 {
                     double temp = (0.1687*dataValue)+25;
                     ui->label_temp->setText(QString::number(temp,'f',2));
                     *tempStream << timestamp << "," << temp << "\n";
                 }
-
                 readBuffer.remove(0, 3);
             }
             else if(readBuffer.at(0) == '\xCC')
             {
                 QByteArray data;
                 data.append(static_cast<char>(threshold));
-                emit emitWriteData(data);
-                readBuffer.remove(0, 1);
-            }
-            else if(readBuffer.at(0) == '\xEE')
-            {
-                QByteArray data;
-                data.append(static_cast<char>(threshold2));
                 emit emitWriteData(data);
                 readBuffer.remove(0, 1);
             }
@@ -417,51 +321,6 @@ void MainWindow::updateCharts()
                 ui->label_bpm->setText(QString::number(bpm, 'f', 2));
             else
                 ui->label_bpm->setText("0");
-        }
-    }
-
-    if(pressDataPoints.size()>0)
-    {
-        qreal rpm_total = 0.0;
-
-        pressMutex.lock();
-        qint64 pressLastTimestamp = pressDataPoints.last().x();
-        pressSeries->replace(pressDataPoints);
-        threshold2MarkerSeries->replace(threshold2Points);
-        pressMutex.unlock();
-
-        pressChart->axisX()->setRange(pressLastTimestamp - 3000, pressLastTimestamp);
-
-        threshold2Series->clear();
-        threshold2Series->append(pressLastTimestamp - 3000, threshold2);
-        threshold2Series->append(pressLastTimestamp, threshold2);
-
-        //int size_limit = std::min(static_cast<int>(thresholdPoints.size()), 4);
-        int size_limit = static_cast<int>(threshold2Points.size());
-
-        if(size_limit>0)
-        {
-            int count = 0;
-
-            for(int i = threshold2Points.size() - 1; i >= threshold2Points.size() - size_limit + 1; --i)
-            {
-                if(threshold2Points[i - 1].x() < pressLastTimestamp - 4000)
-                    break;
-
-                rpm_total += (threshold2Points[i].x() - threshold2Points[i - 1].x());
-                count++;
-            }
-
-            qreal rpm_average_ms = rpm_total / count;
-            qreal rpm_average_sec = rpm_average_ms / 1000;
-            qreal rpm_average_min = rpm_average_sec / 60;
-
-            qreal rpm = 1 / rpm_average_min;
-
-            if(rpm>0)
-                ui->label_rpm->setText(QString::number(rpm, 'f', 2));
-            else
-                ui->label_rpm->setText("0");
         }
     }
 }
@@ -528,21 +387,11 @@ void MainWindow::on_pushButton_threshold_save_clicked()
     threshold = ui->lineEdit_threshold->text().toUInt();
 }
 
-void MainWindow::on_pushButton_threshold2_save_clicked()
-{
-    if(ui->lineEdit_threshold2->text().toUInt() < 0 || ui->lineEdit_threshold2->text().toUInt() > 255)
-    {
-        QMessageBox::critical(this, "Error", "Threshould2 should be in Range: [0-255]");
-        return;
-    }
-
-    threshold2 = ui->lineEdit_threshold2->text().toUInt();
-}
-
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+    stopReading = true;
+
     ecgLog->close();
-    pressLog->close();
     tempLog->close();
 
     disconnect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
@@ -557,8 +406,9 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 MainWindow::~MainWindow()
 {
+    stopReading = true;
+
     ecgLog->close();
-    pressLog->close();
     tempLog->close();
 
     disconnect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
@@ -580,7 +430,6 @@ void MainWindow::on_pushButton_clicked()
     stopReading = true;
 
     ecgLog->close();
-    pressLog->close();
     tempLog->close();
 
     disconnect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);

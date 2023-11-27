@@ -20,7 +20,7 @@ class MainWindow : public QMainWindow
 public:
     const int MAX_VECTOR_SIZE = 20000;
 
-    QMutex ecgMutex, pressMutex;
+    QMutex ecgMutex;
 
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
@@ -36,18 +36,18 @@ private:
 
     bool stopReading = false;
 
-    QVector<QPointF> ecgDataPoints, thresholdPoints, pressDataPoints, threshold2Points;
+    QVector<QPointF> ecgDataPoints, thresholdPoints;
 
-    QFile *ecgLog, *tempLog, *pressLog;
-    QTextStream *ecgStream, *tempStream, *pressStream;
+    QFile *ecgLog, *tempLog;
+    QTextStream *ecgStream, *tempStream;
 
-    QLineSeries *ecgSeries, *pressSeries, *thresholdSeries, *threshold2Series;
-    QScatterSeries *thresholdMarkerSeries, *threshold2MarkerSeries;
-    QChart *ecgChart, *pressChart;
-    QChartView *chartView, *pressChartView;
+    QLineSeries *ecgSeries, *thresholdSeries;
+    QScatterSeries *thresholdMarkerSeries;
+    QChart *ecgChart;
+    QChartView *chartView;
 
-    bool isThresholdPassed, isThreshold2Passed;
-    quint8 threshold, threshold2;
+    bool isThresholdPassed;
+    quint8 threshold;
 
     QTimer *chartUpdateTimer;
 
@@ -64,7 +64,6 @@ private slots:
     void writeData(QByteArray data);
     void on_pushButton_data_save_clicked();
     void on_pushButton_threshold_save_clicked();
-    void on_pushButton_threshold2_save_clicked();
     void on_pushButton_save_port_clicked();
     void on_pushButton_clicked();
 };
