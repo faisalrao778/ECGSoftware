@@ -2,7 +2,7 @@
 #include "ui_MainWindow.h"
 
 #define CHART_WIDTH 1400
-#define CHART_HEIGHT 400
+#define CHART_HEIGHT 380
 #define START_THRESHOLD 150
 #define GRAPH_TIME_RANGE 3000
 
@@ -22,6 +22,30 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     ui->lineEdit_threshold->setText(QString::number(threshold));
     ui->lineEdit_threshold2->setText(QString::number(threshold2));
 
+    ui->comboBox_port_num->addItem("0");
+    ui->comboBox_port_num->addItem("1");
+    ui->comboBox_port_num->addItem("2");
+    ui->comboBox_port_num->addItem("3");
+    ui->comboBox_port_num->addItem("4");
+    ui->comboBox_port_num->addItem("5");
+    ui->comboBox_port_num->addItem("6");
+    ui->comboBox_port_num->addItem("7");
+    ui->comboBox_port_num->addItem("8");
+    ui->comboBox_port_num->addItem("9");
+    ui->comboBox_port_num->addItem("10");
+    ui->comboBox_port_num->addItem("11");
+    ui->comboBox_port_num->addItem("12");
+    ui->comboBox_port_num->addItem("13");
+    ui->comboBox_port_num->addItem("14");
+    ui->comboBox_port_num->addItem("15");
+    ui->comboBox_port_num->addItem("16");
+    ui->comboBox_port_num->addItem("17");
+    ui->comboBox_port_num->addItem("18");
+    ui->comboBox_port_num->addItem("19");
+    ui->comboBox_port_num->addItem("20");
+
+    ui->comboBox_port_num->setCurrentIndex(12);
+
     QString datetime = QDateTime::currentDateTime().toString("yyyyMMddHHmmss");
 
     ecgLog = new QFile("ecgdata_" + datetime + ".txt");
@@ -37,8 +61,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     pressStream = new QTextStream(pressLog);
 
     setupGraph();
-    setupSerialPort();
+    setupSerialPort(ui->comboBox_port_num->currentText());
     //QtConcurrent::run(this, &MainWindow::simulation);
+    QtConcurrent::run(this, &MainWindow::startReading);
 
     connect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
     connect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
@@ -203,9 +228,19 @@ void MainWindow::setupGraph()
     threshold2Series->append(1000,threshold2);
 }
 
-void MainWindow::setupSerialPort()
+void MainWindow::setupSerialPort(QString portNum)
 {
-    serialPort.setPortName("COM12");//COM12
+    if(serialPort.isOpen())
+    {
+        qDebug() << "Closing Opened Ports";
+        serialPort.close();
+    }
+
+    QString port = "COM" + portNum;
+
+    qDebug() << "Opening Serial Port : " << port;
+
+    serialPort.setPortName(port);
     serialPort.setBaudRate(QSerialPort::Baud115200);
     serialPort.setDataBits(QSerialPort::Data8);
     serialPort.setParity(QSerialPort::NoParity);
@@ -226,17 +261,22 @@ void MainWindow::setupSerialPort()
     QByteArray data2;
     data.append(static_cast<char>(threshold2));
     emit emitWriteData(data2);
-
-    QtConcurrent::run(this, &MainWindow::startReading);
 }
 
 void MainWindow::startReading()
 {
     QByteArray readBuffer;
 
-    while (true)
+    while (!stopReading)
     {
         QCoreApplication::processEvents();
+
+        if(!serialPort.isOpen())
+        {
+            qDebug() << "startReading() :: Serial Port Not Opened.";
+            Sleep(1000);
+            continue;
+        }
 
         readBuffer.append(serialPort.readAll());
 
@@ -272,8 +312,8 @@ void MainWindow::startReading()
                     if(ecgDataPoints.size() > MAX_VECTOR_SIZE)
                         ecgDataPoints.removeFirst();
 
-                    //if(thresholdPoints.size() > MAX_VECTOR_SIZE)
-                    //    thresholdPoints.removeFirst();
+                    if(thresholdPoints.size() > MAX_VECTOR_SIZE)
+                        thresholdPoints.removeFirst();
 
                     ecgMutex.unlock();
                 }
@@ -305,7 +345,7 @@ void MainWindow::startReading()
                 else if(readBuffer.at(0) == '\xDD')
                 {
                     double temp = (0.1687*dataValue)+25;
-                    ui->label_temprature->setText(QString::number(temp,'f',2));
+                    ui->label_temp->setText(QString::number(temp,'f',2));
                     *tempStream << timestamp << "," << temp << "\n";
                 }
 
@@ -374,14 +414,16 @@ void MainWindow::updateCharts()
             qreal bpm = 1 / bpm_average_min;
 
             if(bpm>0)
-                ui->label->setText(QString::number(bpm, 'f', 2));
+                ui->label_bpm->setText(QString::number(bpm, 'f', 2));
             else
-                ui->label->setText("0");
+                ui->label_bpm->setText("0");
         }
     }
 
     if(pressDataPoints.size()>0)
     {
+        qreal rpm_total = 0.0;
+
         pressMutex.lock();
         qint64 pressLastTimestamp = pressDataPoints.last().x();
         pressSeries->replace(pressDataPoints);
@@ -393,6 +435,34 @@ void MainWindow::updateCharts()
         threshold2Series->clear();
         threshold2Series->append(pressLastTimestamp - 3000, threshold2);
         threshold2Series->append(pressLastTimestamp, threshold2);
+
+        //int size_limit = std::min(static_cast<int>(thresholdPoints.size()), 4);
+        int size_limit = static_cast<int>(threshold2Points.size());
+
+        if(size_limit>0)
+        {
+            int count = 0;
+
+            for(int i = threshold2Points.size() - 1; i >= threshold2Points.size() - size_limit + 1; --i)
+            {
+                if(threshold2Points[i - 1].x() < pressLastTimestamp - 4000)
+                    break;
+
+                rpm_total += (threshold2Points[i].x() - threshold2Points[i - 1].x());
+                count++;
+            }
+
+            qreal rpm_average_ms = rpm_total / count;
+            qreal rpm_average_sec = rpm_average_ms / 1000;
+            qreal rpm_average_min = rpm_average_sec / 60;
+
+            qreal rpm = 1 / rpm_average_min;
+
+            if(rpm>0)
+                ui->label_rpm->setText(QString::number(rpm, 'f', 2));
+            else
+                ui->label_rpm->setText("0");
+        }
     }
 }
 
@@ -487,6 +557,28 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 MainWindow::~MainWindow()
 {
+    ecgLog->close();
+    pressLog->close();
+    tempLog->close();
+
+    disconnect(this, &MainWindow::emitWriteData, this, &MainWindow::writeData);
+    disconnect(&serialPort, &QSerialPort::errorOccurred, this, &MainWindow::handleError);
+
+    serialPort.close();
+
+    delete ui;
+    QCoreApplication::quit();
+}
+
+void MainWindow::on_pushButton_save_port_clicked()
+{
+    setupSerialPort(ui->comboBox_port_num->currentText());
+}
+
+void MainWindow::on_pushButton_clicked()
+{
+    stopReading = true;
+
     ecgLog->close();
     pressLog->close();
     tempLog->close();
