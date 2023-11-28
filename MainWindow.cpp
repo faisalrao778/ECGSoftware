@@ -195,9 +195,9 @@ void MainWindow::setupSerialPort(QString portNum)
 
     qDebug() << "Opened Serial Port!";
 
-    QByteArray data;
-    data.append(static_cast<char>(threshold));
-    emit emitWriteData(data);
+    //QByteArray data;
+    //data.append(static_cast<char>(threshold));
+    //emit emitWriteData(data);
 }
 
 void MainWindow::startReading()
